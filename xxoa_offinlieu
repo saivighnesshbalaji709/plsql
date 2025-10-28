@@ -1,0 +1,288 @@
+create or replace PACKAGE BODY      xxoa_offin_lieu_bank_pkg
+AS
+   ----------------------------------------------------------------------
+   PROCEDURE OA_OffinLieu_bank_Adj_proc (
+      p_errbuf    OUT   VARCHAR2,
+      p_retcode   OUT   NUMBER,
+	  p_holiday_name        IN    VARCHAR2
+
+   ) is
+
+   v_date                DATE;
+   v_element_type_id  NUMBER;
+   v_valid_record   VARCHAR2 (10);
+   v_valid_rec_det  VARCHAR2 (10);
+   v_err_msg  VARCHAR2 (1000) := NULL;
+   v_request_id                       NUMBER;
+   l_batch_id                         NUMBER := NULL;
+   l_object_version_number             NUMBER := NULL;
+   v_batch_name                     VARCHAR2(1000);
+   v_batch_line_id                    NUMBER := NULL;
+   v_batch_object_version_number     NUMBER;
+   v_request_id1                     NUMBER;
+   l_user_id     NUMBER;
+   l_resp_id     NUMBER;
+   l_resp_appl_id NUMBER;
+   v_chk_ele_ent NUMBER := 0;
+
+
+   CURSOR c_ofl_bank
+          is
+		select papf.Employee_Number ,papf.Full_Name,paaf.assignment_id,paaf.assignment_number, flv.meaning EMPLOYEE_GROUP,
+         flv1.meaning EMPLOYEE_TYPE,pgr.name Grade,holiday_date,hcd.name
+		 from  per_all_people_f papf  ,fnd_lookup_values flv ,
+          fnd_lookup_values flv1,per_all_assignments_f paaf, pay_people_groups ppg
+        ,hxt_holiday_calendars   hcl, hxt_holiday_days_vl     hcd
+        ,per_grades pgr ,pay_payrolls_f ppf
+		where 1=1
+		and hcl.id = hcd.hcl_id
+		and hcl.name = 'OA HQ Holiday Calendar'
+		--and hcd.holiday_date = to_date('02-Apr-2025')
+		and TRUNC(hcd.holiday_date,'YYYY') = trunc(sysdate,'YYYY')
+		and hcd.name = p_holiday_name---'EID AL FITR'
+		and paaf.assignment_type='E'
+		and paaf.primary_flag='Y'
+		and  paaf.payroll_id = ppf.payroll_id
+		and ppf.payroll_id in (65,67)
+		---and papf.employee_number ='60532'
+		and papf.current_employee_flag ='Y'
+		and paaf.person_id=papf.person_id
+		and pgr.grade_id = paaf.grade_id
+		and hcd.holiday_date between trunc(paaf.effective_start_date ) and trunc(paaf.effective_end_date)
+		and  hcd.holiday_date between trunc(papf.effective_start_date ) and trunc(papf.effective_end_date)
+		and  hcd.holiday_date between trunc(pgr.date_from ) and nvl(pgr.date_to,to_date('31-Dec-4712'))
+		 AND ppg.people_group_id(+) = paaf.people_group_id
+			 AND flv.lookup_type(+) = 'XXOA_HQ_EMPLOYEE_GROUP'
+			 AND flv.language(+)    = 'US'
+			 AND ppg.segment1       = flv.lookup_code(+)
+			  AND  ppg.segment2 =flv1.lookup_code(+)
+			 AND flv1.lookup_type(+) = 'XXOA_HQ_EMPLOYEE_TYPE'
+				AND flv1.language(+)    = 'US'
+and flv.meaning  in (    SELECT meaning FROM apps.fnd_lookup_values_vl flv
+                            WHERE
+                            flv.lookup_type = 'XXOA_OFFIN_LIEU_EMP_GROUP'
+                            AND flv.enabled_flag = 'Y'
+                            AND sysdate BETWEEN flv.start_date_active AND nvl(flv.end_date_active, to_date('31-DEC-4712')))
+and flv1.meaning  in (    SELECT meaning FROM apps.fnd_lookup_values_vl flv
+                            WHERE
+                            flv.lookup_type = 'XXOA_OFFIN_LIEU_EMP_TYPE'
+                            AND flv.enabled_flag = 'Y'
+                            AND sysdate BETWEEN flv.start_date_active AND nvl(flv.end_date_active, to_date('31-DEC-4712')))
+and pgr.name in (    SELECT meaning FROM apps.fnd_lookup_values_vl flv
+                            WHERE
+                            flv.lookup_type = 'XXOA_OFFIN_LIEU_EMP_GRADES'
+                            AND flv.enabled_flag = 'Y'
+                            AND sysdate BETWEEN flv.start_date_active AND nvl(flv.end_date_active, to_date('31-DEC-4712')));
+
+	BEGIN
+
+
+           v_request_id     := fnd_profile.value('conc_request_id');
+	  	   l_user_id       := fnd_global.user_id;
+           l_resp_id       := fnd_global.resp_id;
+           l_resp_appl_id  := fnd_global.resp_appl_id;
+
+	  	   v_batch_name:='OFL_BANK'||v_request_id||'-'||TO_CHAR(SYSDATE,'DDMONRRRR');
+
+		   v_valid_record := 'Y';
+
+          fnd_file.put_line (fnd_file.log, 'v_batch_name '||v_batch_name);  ---  Batch creation
+           BEGIN
+           pay_batch_element_entry_api.create_batch_header (
+               p_session_date            => TRUNC (SYSDATE),
+               p_batch_name              => v_batch_name,
+               p_business_group_id       => 81,
+               p_action_if_exists        => 'I',
+               p_batch_id                => l_batch_id,
+               p_reject_if_results_exists=> 'N',
+               p_object_version_number   => l_object_version_number);
+           COMMIT;
+           fnd_file.put_line (fnd_file.output, 'Batch Created ....'||v_batch_name);
+          EXCEPTION
+           WHEN OTHERS
+           THEN
+               v_valid_record := 'N';
+               v_err_msg :=
+                     'Error in creating batch '
+                  || SUBSTR (SQLERRM, 1, 100);
+               fnd_file.put_line (fnd_file.LOG,
+                                     'Error in creating batch '|| v_err_msg );
+        END;
+
+	  ---- element_type_id is deriving for Annual Leave Adjustment
+	  BEGIN
+            SELECT element_type_id
+              INTO v_element_type_id
+              FROM pay_element_types_f
+             WHERE UPPER (element_name) = UPPER ('Off In Lieu Bank Adjustment')
+               AND trunc(sysdate) BETWEEN effective_start_date AND effective_end_date
+               AND business_group_id = 81;
+
+         EXCEPTION
+            WHEN NO_DATA_FOUND
+            THEN
+               v_valid_record := 'N';
+               v_err_msg := 'No element is defined';
+               fnd_file.put_line (fnd_file.LOG,
+                                     v_err_msg
+                                 );
+            WHEN TOO_MANY_ROWS
+            THEN
+               v_valid_record := 'N';
+               v_err_msg := 'Multiple element is fetched';
+               fnd_file.put_line (fnd_file.LOG,
+                                     v_err_msg
+                                 );
+            WHEN OTHERS
+            THEN
+               v_valid_record := 'N';
+               v_err_msg := 'Error in getting element: ' || SUBSTR (SQLERRM, 1, 100);
+               fnd_file.put_line (fnd_file.LOG,
+                                    v_err_msg
+                                 );
+         END;
+
+
+	FOR rec_ofl_bank_data IN c_ofl_bank
+	LOOP
+
+	    v_valid_rec_det := 'Y';
+
+
+
+	  ---- Validation to check employee's existing element entry for same holiday date
+	  BEGIN
+
+
+	  v_chk_ele_ent := 0 ;
+
+           SELECT count(1) into v_chk_ele_ent
+			FROM
+			PAY_ELEMENT_TYPES_F PETF ,
+			PAY_ELEMENT_ENTRIES_F PEEF ,
+			PER_ALL_ASSIGNMENTS_F PAAF ,
+			PER_ALL_PEOPLE_F PAPF ,
+			PAY_ELEMENT_ENTRY_VALUES_F PEEVF ,
+			PAY_INPUT_VALUES_F PIVF
+			WHERE 1 = 1
+			and PAPF.employee_number = rec_ofl_bank_data.employee_number
+			and pivf.name ='Effective Date'
+			and TO_CHAR(rec_ofl_bank_data.holiday_date,'RRRR/MM/DD HH24:MI:SS') = PEEVF.SCREEN_ENTRY_VALUE
+			AND PEEF.ELEMENT_TYPE_ID = PETF.ELEMENT_TYPE_ID
+			AND PIVF.ELEMENT_TYPE_ID = PETF.ELEMENT_TYPE_ID
+			AND rec_ofl_bank_data.holiday_date BETWEEN TRUNC(PEEF.EFFECTIVE_START_DATE) AND TRUNC(PEEF.EFFECTIVE_END_DATE)
+			AND rec_ofl_bank_data.holiday_date BETWEEN TRUNC(PIVF.EFFECTIVE_START_DATE) AND TRUNC(PIVF.EFFECTIVE_END_DATE)
+			AND PAAF.ASSIGNMENT_ID = PEEF.ASSIGNMENT_ID
+			AND rec_ofl_bank_data.holiday_date BETWEEN TRUNC(PAAF.EFFECTIVE_START_DATE) AND TRUNC(PAAF.EFFECTIVE_END_DATE)
+			AND PAPF.PERSON_ID = PAAF.PERSON_ID
+			AND PAPF.CURRENT_EMP_OR_APL_FLAG = 'Y'
+			AND rec_ofl_bank_data.holiday_date BETWEEN TRUNC(PAPF.EFFECTIVE_START_DATE) AND TRUNC(PAPF.EFFECTIVE_END_DATE)
+			AND PEEVF.ELEMENT_ENTRY_ID = PEEF.ELEMENT_ENTRY_ID
+			AND PIVF.INPUT_VALUE_ID = PEEVF.INPUT_VALUE_ID
+			AND paaf.primary_flag = 'Y'
+			AND paaf.assignment_type = 'E'
+			AND rec_ofl_bank_data.holiday_date BETWEEN TRUNC(PEEVF.EFFECTIVE_START_DATE) AND TRUNC(PEEVF.EFFECTIVE_END_DATE)
+			AND PETF.ELEMENT_NAME = 'Off In Lieu Bank Adjustment'
+			and papf.business_group_id = 81;
+
+         EXCEPTION
+            WHEN NO_DATA_FOUND
+            THEN
+               v_valid_rec_det := 'Y';
+               v_err_msg := 'Creating Element Entry for SN := '||rec_ofl_bank_data.employee_number || ' For Holiday Date := '||rec_ofl_bank_data.holiday_date;
+               fnd_file.put_line (fnd_file.LOG,
+                                     v_err_msg
+                                 );
+            WHEN OTHERS
+            THEN
+               v_valid_rec_det := 'N';
+               v_err_msg := 'Error in checking Element Entry for SN := '||rec_ofl_bank_data.employee_number || ' For Holiday Date := '||rec_ofl_bank_data.holiday_date|| SUBSTR (SQLERRM, 1, 100);
+               fnd_file.put_line (fnd_file.LOG,
+                                    v_err_msg
+                                 );
+         END;
+
+		 IF v_chk_ele_ent <> 0
+		 THEN
+
+		 v_valid_rec_det := 'N';
+         v_err_msg := 'Off In Lieu Bank Adjustment Element Entry already exists for SN := '||rec_ofl_bank_data.employee_number || ' For Holiday Date := '||rec_ofl_bank_data.holiday_date;
+         fnd_file.put_line (fnd_file.LOG,
+                                    v_err_msg
+                                 );
+		END IF;
+
+	IF v_valid_record = 'Y' and v_valid_rec_det = 'Y'
+     THEN
+		BEGIN
+
+
+            fnd_date.initialize ('DD-MON-RRRR', NULL);
+                pay_batch_element_entry_api.create_batch_line (
+                    p_session_date           => TRUNC (SYSDATE),
+                    p_batch_id               => l_batch_id,
+                    p_assignment_id          => rec_ofl_bank_data.assignment_id,
+                    p_assignment_number     => rec_ofl_bank_data.assignment_number,
+                    p_effective_date        => rec_ofl_bank_data.holiday_date,
+                    p_element_name          => 'Off In Lieu Bank Adjustment',
+                    p_element_type_id         => v_element_type_id,
+                   -- p_attribute10           =>'Y',
+                    p_value_1                 => 1,
+                    p_value_2                 => rec_ofl_bank_data.holiday_date,
+                    p_batch_line_id            => v_batch_line_id,
+                    p_object_version_number => v_batch_object_version_number);
+
+               fnd_file.put_line (fnd_file.output,
+                                     'Off In Lieu Bank for Employee Number :  '
+                                  || rec_ofl_bank_data.employee_number
+                                  || '     Created Successfully with :'
+                                  || 1
+                                  || '     Days for Holiday Date := '||rec_ofl_bank_data.holiday_date
+                                 );
+
+
+              EXCEPTION
+               WHEN OTHERS
+               THEN
+                  v_valid_rec_det := 'N';
+
+                  v_err_msg :=
+                        'Error during element entry Batch API: '
+                     || SUBSTR (SQLERRM, 1, 100);
+                  fnd_file.put_line (fnd_file.LOG,
+                                        'Employee Number: '
+                                     || rec_ofl_bank_data.employee_number
+                                     || v_err_msg
+                                    );
+
+      END;
+	END IF;
+END Loop;
+
+
+		BEGIN
+        fnd_global.apps_initialize (l_user_id, l_resp_id , l_resp_appl_id);
+        v_request_id1 :=
+            fnd_request.submit_request (
+                application   => 'PER',
+                program       => 'PAYLINK(TRANSFER)',
+                description   => 'Transfers BEE batch',
+                start_time    => SYSDATE,
+                sub_request   => FALSE,
+                argument1     => 'BATCHEE',
+                argument2     => 'TRANSFER',
+                argument3     => l_batch_id);
+        COMMIT;
+     fnd_file.put_line (fnd_file.output,
+                                     v_batch_name||' BEE transferred successfully '
+                                 );
+    END;
+
+	 EXCEPTION
+      WHEN OTHERS
+      THEN
+         fnd_file.put_line (fnd_file.LOG,
+                            'Error In Main Program' || SUBSTR(SQLERRM,1,100) || SQLCODE);
+   END OA_OffinLieu_bank_Adj_proc;
+
+END xxoa_offin_lieu_bank_pkg;
