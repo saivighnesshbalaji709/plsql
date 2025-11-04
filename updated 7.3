@@ -47,14 +47,14 @@ CREATE OR REPLACE PACKAGE BODY xxoa_offin_lieu_bank_pkg AS
         AND  UPPER(flv.meaning) = 'SHIFT EMPLOYEE'
         AND  TRUNC(SYSDATE) BETWEEN TRUNC(paaf.effective_start_date)
                                 AND NVL(TRUNC(paaf.effective_end_date), TO_DATE('31-DEC-4712','DD-MON-YYYY'))
-        AND  ppf.payroll_name IN ('Base Payroll','Executive Payroll')   -- adjust if needed
+        AND  ppf.payroll_name IN ('Base Payroll','Executive Payroll')
         AND  NOT EXISTS (
              SELECT 1
              FROM pay_element_entries_f peef
              JOIN pay_element_types_f petf
                ON petf.element_type_id = peef.element_type_id
              WHERE peef.assignment_id = paaf.assignment_id
-               AND petf.element_name = 'Off In Lieu Bank Plan'
+               AND UPPER(petf.element_name) = 'OFF IN LIEU BANK PLAN'
                AND TRUNC(SYSDATE) BETWEEN TRUNC(peef.effective_start_date)
                                      AND NVL(TRUNC(peef.effective_end_date), TO_DATE('31-DEC-4712','DD-MON-YYYY'))
         );
@@ -115,14 +115,17 @@ CREATE OR REPLACE PACKAGE BODY xxoa_offin_lieu_bank_pkg AS
     END;
 
     ----------------------------------------------------------------------
-    -- Loop through each shift employee
+    -- Loop through each shift employee and create BEE line
     ----------------------------------------------------------------------
     FOR rec IN c_shift_assign LOOP
       v_valid_rec_det := 'Y';
       v_chk_ele_ent := 0;
 
-      -- Use assignment start date as element effective date
+      -- Effective date logic
       v_start_date := TRUNC(rec.assign_start_date);
+      IF v_start_date > TRUNC(SYSDATE) THEN
+         v_start_date := TRUNC(SYSDATE);
+      END IF;
 
       BEGIN
         pay_batch_element_entry_api.create_batch_line (
@@ -137,10 +140,11 @@ CREATE OR REPLACE PACKAGE BODY xxoa_offin_lieu_bank_pkg AS
           p_batch_line_id          => v_batch_line_id,
           p_object_version_number  => v_batch_object_version_number
         );
-        COMMIT;
 
+        COMMIT;
         fnd_file.put_line (fnd_file.output,
           'Created element for '||rec.employee_number||' on '||TO_CHAR(v_start_date,'DD-MON-YYYY'));
+
       EXCEPTION
         WHEN OTHERS THEN
           v_err_msg := 'Error for '||rec.employee_number||' - '||SUBSTR(SQLERRM,1,200);
@@ -165,8 +169,11 @@ CREATE OR REPLACE PACKAGE BODY xxoa_offin_lieu_bank_pkg AS
          argument2     => 'TRANSFER',
          argument3     => l_batch_id
       );
+
       COMMIT;
-      fnd_file.put_line (fnd_file.output, v_batch_name||' transferred successfully. Request ID: '||v_request_id1);
+      fnd_file.put_line (fnd_file.output,
+         v_batch_name||' transferred successfully. Request ID: '||v_request_id1);
+
     EXCEPTION
       WHEN OTHERS THEN
         fnd_file.put_line (fnd_file.LOG, 'Error submitting BEE Transfer: '||SUBSTR(SQLERRM,1,200));
