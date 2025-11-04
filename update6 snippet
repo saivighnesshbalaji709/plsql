@@ -1,0 +1,21 @@
+BEGIN
+   SELECT COUNT(*)
+     INTO v_chk_ele_ent
+     FROM pay_element_entries_f peef
+     JOIN pay_element_types_f petf
+       ON petf.element_type_id = peef.element_type_id
+     JOIN per_all_assignments_f paaf
+       ON paaf.assignment_id = peef.assignment_id
+    WHERE paaf.assignment_id = rec.assignment_id
+      AND petf.element_type_id = v_element_type_id
+      AND TRUNC(SYSDATE) BETWEEN TRUNC(peef.effective_start_date)
+                              AND TRUNC(peef.effective_end_date)
+      AND TRUNC(SYSDATE) BETWEEN TRUNC(paaf.effective_start_date)
+                              AND TRUNC(paaf.effective_end_date)
+      AND TRUNC(SYSDATE) BETWEEN TRUNC(petf.effective_start_date)
+                              AND TRUNC(petf.effective_end_date)
+      AND petf.business_group_id = 81; -- ensure same BG
+EXCEPTION
+   WHEN OTHERS THEN
+      v_chk_ele_ent := 0;
+END;
