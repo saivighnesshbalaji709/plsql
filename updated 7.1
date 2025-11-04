@@ -1,0 +1,78 @@
+---- Validation to check employee's existing element entry
+BEGIN
+   v_chk_ele_ent := 0;
+
+   SELECT COUNT(1)
+     INTO v_chk_ele_ent
+     FROM PAY_ELEMENT_TYPES_F PETF,
+          PAY_ELEMENT_ENTRIES_F PEEF,
+          PER_ALL_ASSIGNMENTS_F PAAF,
+          PER_ALL_PEOPLE_F PAPF
+    WHERE 1 = 1
+      AND PETF.ELEMENT_TYPE_ID = PEEF.ELEMENT_TYPE_ID
+      AND PAAF.ASSIGNMENT_ID   = PEEF.ASSIGNMENT_ID
+      AND PAPF.PERSON_ID       = PAAF.PERSON_ID
+      AND PAAF.ASSIGNMENT_ID   = rec.assignment_id
+      AND PETF.ELEMENT_NAME    = 'Off In Lieu Bank Balance'
+      AND PAPF.CURRENT_EMPLOYEE_FLAG = 'Y'
+      AND PAPF.BUSINESS_GROUP_ID = 81
+      AND TRUNC(SYSDATE) BETWEEN TRUNC(PEEF.EFFECTIVE_START_DATE) AND TRUNC(PEEF.EFFECTIVE_END_DATE)
+      AND TRUNC(SYSDATE) BETWEEN TRUNC(PAAF.EFFECTIVE_START_DATE) AND TRUNC(PAAF.EFFECTIVE_END_DATE)
+      AND TRUNC(SYSDATE) BETWEEN TRUNC(PETF.EFFECTIVE_START_DATE) AND TRUNC(PETF.EFFECTIVE_END_DATE)
+      AND TRUNC(SYSDATE) BETWEEN TRUNC(PAPF.EFFECTIVE_START_DATE) AND TRUNC(PAPF.EFFECTIVE_END_DATE);
+
+EXCEPTION
+   WHEN NO_DATA_FOUND THEN
+      v_valid_rec_det := 'Y';
+      v_err_msg := 'Creating Element Entry for Employee Number := '
+                   || rec.employee_number;
+      fnd_file.put_line(fnd_file.LOG, v_err_msg);
+
+   WHEN OTHERS THEN
+      v_valid_rec_det := 'N';
+      v_err_msg := 'Error in checking Element Entry for Employee := '
+                   || rec.employee_number || ' => ' || SUBSTR(SQLERRM, 1, 100);
+      fnd_file.put_line(fnd_file.LOG, v_err_msg);
+END;
+
+-- If element entry already exists
+IF v_chk_ele_ent <> 0 THEN
+   v_valid_rec_det := 'N';
+   v_err_msg := 'Off In Lieu Bank Balance Element Entry already exists for Employee := '
+                || rec.employee_number;
+   fnd_file.put_line(fnd_file.LOG, v_err_msg);
+END IF;
+
+
+-- Proceed to create batch line only if record is valid
+IF v_valid_record = 'Y' AND v_valid_rec_det = 'Y' THEN
+   BEGIN
+      fnd_date.initialize('DD-MON-RRRR', NULL);
+
+      pay_batch_element_entry_api.create_batch_line (
+         p_session_date           => TRUNC(SYSDATE),
+         p_batch_id               => l_batch_id,
+         p_assignment_id          => rec.assignment_id,
+         p_assignment_number      => rec.assignment_number,
+         p_effective_date         => v_start_date,
+         p_element_name           => 'Off In Lieu Bank Balance',
+         p_element_type_id        => v_element_type_id,
+         p_value_1                => 1,
+         p_batch_line_id          => v_batch_line_id,
+         p_object_version_number  => v_batch_object_version_number
+      );
+
+      fnd_file.put_line(fnd_file.OUTPUT,
+         'Off In Lieu Bank Element for Employee Number: '
+         || rec.employee_number
+         || ' created successfully for date: '
+         || TO_CHAR(v_start_date, 'DD-MON-YYYY'));
+
+   EXCEPTION
+      WHEN OTHERS THEN
+         v_valid_rec_det := 'N';
+         v_err_msg := 'Error during element entry Batch API for Employee: '
+                      || rec.employee_number || ' => ' || SUBSTR(SQLERRM, 1, 100);
+         fnd_file.put_line(fnd_file.LOG, v_err_msg);
+   END;
+END IF;
