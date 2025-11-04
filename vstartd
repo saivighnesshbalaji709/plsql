@@ -1,0 +1,181 @@
+ PROCEDURE OA_Shift_OffinLieu_Entry_proc (
+   p_errbuf    OUT VARCHAR2,
+   p_retcode   OUT NUMBER
+) IS
+   v_element_type_id      NUMBER;
+   v_valid_record         VARCHAR2 (10);
+   v_valid_rec_det        VARCHAR2 (10);
+   v_err_msg              VARCHAR2 (1000) := NULL;
+   v_request_id           NUMBER;
+   l_batch_id             NUMBER := NULL;
+   l_object_version_number NUMBER := NULL;
+   v_batch_name           VARCHAR2(1000);
+   v_batch_line_id        NUMBER := NULL;
+   v_batch_object_version_number NUMBER;
+   v_request_id1          NUMBER;
+   l_user_id              NUMBER;
+   l_resp_id              NUMBER;
+   l_resp_appl_id         NUMBER;
+   v_chk_ele_ent          NUMBER := 0;
+   v_start_date           DATE;
+
+   CURSOR c_shift_emp IS
+      SELECT papf.employee_number,
+             papf.full_name,
+             paaf.assignment_id,
+             paaf.assignment_number,
+             ppf.payroll_name,
+             paaf.effective_start_date join_date
+        FROM per_all_people_f papf,
+             per_all_assignments_f paaf,
+             pay_payrolls_f ppf,
+             pay_people_groups ppg,
+             fnd_lookup_values flv
+       WHERE paaf.person_id = papf.person_id
+         AND paaf.primary_flag = 'Y'
+         AND paaf.assignment_type = 'E'
+         AND paaf.payroll_id = ppf.payroll_id
+		 AND ppf.payroll_name IN (SELECT flv.meaning FROM fnd_lookup_values flv WHERE flv.lookup_type = 'XXOA_HQ_PAYROLL_TYPE')
+         AND papf.current_employee_flag = 'Y'
+         AND flv.lookup_type = 'XXOA_HQ_EMPLOYEE_TYPE'
+         AND flv.language = 'US'
+         AND flv.lookup_code = ppg.segment2
+         AND flv.meaning = 'Shift Employee'
+         AND ppg.people_group_id(+) = paaf.people_group_id
+         AND TRUNC(SYSDATE) BETWEEN TRUNC(papf.effective_start_date) AND TRUNC(papf.effective_end_date)
+         AND TRUNC(SYSDATE) BETWEEN TRUNC(paaf.effective_start_date) AND TRUNC(paaf.effective_end_date);
+BEGIN
+   v_request_id := fnd_profile.value('conc_request_id');
+   l_user_id := fnd_global.user_id;
+   l_resp_id := fnd_global.resp_id;
+   l_resp_appl_id := fnd_global.resp_appl_id;
+   v_batch_name := 'SHIFT_PLAN_' || v_request_id || '_' || TO_CHAR(SYSDATE, 'DDMONRRRR');
+
+   v_valid_record := 'Y';
+   fnd_file.put_line(fnd_file.LOG, 'Batch Name: ' || v_batch_name);
+
+   BEGIN                                                            ---Creation of Batch Header
+      pay_batch_element_entry_api.create_batch_header(
+         p_session_date            => TRUNC(SYSDATE),
+         p_batch_name              => v_batch_name,
+         p_business_group_id       => 81,
+         p_action_if_exists        => 'I',
+         p_batch_id                => l_batch_id,
+         p_reject_if_results_exists=> 'N',
+         p_object_version_number   => l_object_version_number);
+      COMMIT;
+      fnd_file.put_line(fnd_file.OUTPUT, 'Batch Created: ' || v_batch_name);
+   EXCEPTION
+      WHEN OTHERS THEN
+         v_valid_record := 'N';
+         v_err_msg := 'Error creating batch: ' || SUBSTR(SQLERRM,1,100);
+         fnd_file.put_line(fnd_file.LOG, v_err_msg);
+   END;
+
+---- element_type_id is deriving for Annual Leave Adjustment
+   BEGIN
+      SELECT element_type_id
+        INTO v_element_type_id
+        FROM pay_element_types_f
+       WHERE UPPER(element_name) = UPPER('Off In Lieu Bank Balance')
+         AND TRUNC(SYSDATE) BETWEEN effective_start_date AND effective_end_date
+         AND business_group_id = 81;
+   EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+         v_valid_record := 'N';
+         fnd_file.put_line(fnd_file.LOG, 'No element found for Off In Lieu Bank Plan');
+	  WHEN TOO_MANY_ROWS THEN
+	     v_valid_record := 'N';
+		 fnd_file.put_line(fnd_file.LOG, 'Multiple elements is fetched');
+
+      WHEN OTHERS THEN
+         v_valid_record := 'N';
+         fnd_file.put_line(fnd_file.LOG, 'Error fetching element_type_id: ' || SUBSTR(SQLERRM,1,100));
+   END;
+
+
+   FOR rec IN c_shift_emp LOOP
+      v_valid_rec_det := 'Y';
+	  
+	  ---- Validation to check employee's existing element entry
+      BEGIN
+	  v_chk_ele_ent := 0;
+
+      SELECT COUNT(1)
+           INTO v_chk_ele_ent
+           FROM pay_element_entries_f peef,
+                pay_element_types_f petf,
+                per_all_assignments_f paaf
+            WHERE 1=1
+            AND petf.element_type_id = peef.element_type_id
+            AND paaf.assignment_id = peef.assignment_id
+            AND paaf.assignment_id = rec.assignment_id
+            AND petf.element_name = 'Off In Lieu Bank Balance'
+            AND TRUNC(SYSDATE) BETWEEN TRUNC(peef.effective_start_date)
+                                    AND TRUNC(peef.effective_end_date)
+			AND TRUNC(SYSDATE) BETWEEN TRUNC(paaf.effective_start_date)
+                                    AND TRUNC(paaf.effective_end_date)
+			AND TRUNC(SYSDATE) BETWEEN TRUNC(petf.effective_start_date)
+                                    AND TRUNC(petf.effective_end_date);
+								
+      EXCEPTION
+         WHEN OTHERS THEN
+            v_chk_ele_ent := 0;
+
+      END;
+
+      IF v_chk_ele_ent = 0 THEN
+
+         BEGIN
+            pay_batch_element_entry_api.create_batch_line (
+               p_session_date           => TRUNC(SYSDATE),
+               p_batch_id               => l_batch_id,
+               p_assignment_id          => rec.assignment_id,
+               p_assignment_number      => rec.assignment_number,
+               p_effective_date         => v_start_date,
+               p_element_name           => 'Off In Lieu Bank Balance',
+               p_element_type_id        => v_element_type_id,
+               p_value_1                => 1,
+               p_batch_line_id          => v_batch_line_id,
+               p_object_version_number  => v_batch_object_version_number);
+
+            fnd_file.put_line(fnd_file.OUTPUT,
+               'Element created for Employee: '||rec.employee_number||
+               ' on '||TO_CHAR(v_start_date,'DD-MON-YYYY'));
+         EXCEPTION
+            WHEN OTHERS THEN
+               fnd_file.put_line(fnd_file.LOG,
+                  'Error creating element for Employee '||rec.employee_number||': '||SUBSTR(SQLERRM,1,100));
+         END;
+      ELSE
+         fnd_file.put_line(fnd_file.LOG,
+            'Element already exists for Employee: '||rec.employee_number||' as on sysdate.');
+      END IF;
+   END LOOP;
+
+
+   BEGIN
+      fnd_global.apps_initialize(l_user_id, l_resp_id , l_resp_appl_id);
+      v_request_id1 := fnd_request.submit_request(
+         application   => 'PER',
+         program       => 'PAYLINK(TRANSFER)',
+         description   => 'Transfer BEE Batch',
+         start_time    => SYSDATE,
+         sub_request   => FALSE,
+         argument1     => 'BATCHEE',
+         argument2     => 'TRANSFER',
+         argument3     => l_batch_id);
+      COMMIT;
+      fnd_file.put_line(fnd_file.OUTPUT, v_batch_name || ' BEE transferred successfully.');
+   EXCEPTION
+      WHEN OTHERS THEN
+         fnd_file.put_line(fnd_file.LOG, 'Error transferring BEE batch: ' || SUBSTR(SQLERRM,1,100));
+   END;
+
+EXCEPTION
+   WHEN OTHERS THEN
+      fnd_file.put_line(fnd_file.LOG, 'Error in main program: ' || SUBSTR(SQLERRM,1,100));
+END OA_Shift_OffinLieu_Entry_proc;  
+
+
+CORRECT CODE - ROLLBACK
