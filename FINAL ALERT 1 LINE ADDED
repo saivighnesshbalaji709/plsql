@@ -1,0 +1,402 @@
+select   emp_number
+        ,emp_name
+        ,PUN_DATE
+        ,time_in
+        ,time_out
+        ,leave
+        ,time_in_status
+        ,time_out_status
+        ,tot_late_early_cnt
+        ,initcap(to_char(sysdate,'MONTH')) as_of_month
+        ,(sysdate - 1) as_of_date
+    	,email_address				 
+		,sup_email_address
+		,mgr_email_address
+		,hr_email_address
+		,case 
+		     when tot_late_early_cnt <= 3 then regexp_replace((regexp_replace((regexp_replace((sup_email_address||','||mgr_email_address),'^[,]','',1)),'[,]+$','',1)),',{2,}',',') 
+			 when tot_late_early_cnt > 3 then  regexp_replace((regexp_replace((regexp_replace((sup_email_address||','||mgr_email_address||','||hr_email_address),'^[,]','',1)),'[,]+$','',1)),',{2,}',',') 
+		 end cc_email_address
+    into &emp_number
+        ,&emp_name
+        ,&PUN_DATE
+        ,&time_in
+        ,&time_out
+        ,&leave
+        ,&time_in_status
+        ,&time_out_status
+        ,&tot_late_early_cnt
+        ,&as_of_month
+		,&as_of_date
+   	    ,&email_address				 
+		,&sup_email_address
+		,&mgr_email_address
+		,&hr_email_address
+        ,&cc_email_address
+from
+(
+SELECT   /*+INDEX_FFS(hxt_add_assign_info_f)*/
+         person_id, emp_number, emp_name, sbu, department, section, job,
+         POSITION, grade,  punch_date,TO_CHAR(punch_date,'DD-MON-RRRR') PUN_DATE, shift_name, shift_in, shift_out,
+         time_in, time_out,(SELECT lpad(time_hours,2,'0') ||':'|| lpad(nvl(time_minutes,0),2,'0') 
+             FROM xxoa_otl_time_entry_stg xxot
+               WHERE 1=1
+               AND NVL(xxot.otl_int_status,'N') NOT IN ('E')
+               AND xxot.trans_mode=1
+               AND TRIM(xxot.emp_no)=EMP_NUMBER
+              AND TRUNC(xxot.trans_date) =TRUNC(PUNCH_DATE)
+			  AND ROWNUM=1) ACTUAL_PUNTCH_IN,
+			  leave,
+         CASE
+            WHEN tot_hour > 0
+               THEN    TO_CHAR (TRUNC ((tot_hour * 3600) / 3600),
+                                'FM9900'
+                               )
+                    || ':'
+                    || TO_CHAR (TRUNC (MOD ((tot_hour * 3600), 3600) / 60),
+                                'FM00'
+                               )
+         END tot_hour,
+         time_in_status, time_out_status,
+         CASE
+            WHEN extra_hour > 0
+               THEN    TO_CHAR (TRUNC ((extra_hour * 3600) / 3600),
+                                'FM9900'
+                               )
+                    || ':'
+                    || TO_CHAR (TRUNC (MOD ((extra_hour * 3600), 3600) / 60),
+                                'FM00'
+                               )
+         END extra_hour
+         ,admin_plan_yn
+         ,(sum(
+              case
+                  when (leave = 'REGULAR DAY' and (time_in_status = 'LATE' or time_out_status  ='EARLY'))
+                        then 1
+                  else 0
+              end
+              ) over (partition by emp_number)
+          ) tot_late_early_cnt
+         ,(sum(
+              case
+                  when (leave = 'REGULAR DAY' and trunc(punch_date) = trunc(sysdate-1) and(time_in_status = 'LATE' or time_out_status  ='EARLY'))
+                        then 1
+                  else 0
+              end
+              ) over (partition by emp_number)
+          ) yesterday_late_early_cnt
+				 ,email_address				 
+				 ,sup_email_address
+				 ,mgr_email_address
+				 ,hr_email_address
+    FROM (SELECT person_id, emp_number, emp_name, sbu, department, section,
+                 job, POSITION, grade, punch_date, shift_name,
+                 standard_start shift_in, standard_stop shift_out,
+                 NVL (LPAD (TO_CHAR (timedate_in, 'HH24:MI'), '5', '0'),
+                      0
+                     ) time_in,
+                 NVL (LPAD (TO_CHAR (timedate_out, 'HH24:MI'), '5', '0'),
+                      0
+                     ) time_out,
+                 leave, tot_hour,
+                CASE WHEN (leave = 'REGULAR DAY' and admin_plan_yn = 'Y') then XXOA_HR_FLEXI_TIMMING_PKG.get_time_in_status(standard_start_time_stamp,timedate_in,payroll_id) 
+                     ELSE
+					 CASE
+                      WHEN leave = 'REGULAR DAY'
+                         THEN CASE
+                                WHEN standard_start_time_stamp =
+                                                   timedate_in
+                                   THEN 'ON TIME'
+                                WHEN standard_start_time_stamp >
+                                                   timedate_in
+                                   THEN 'EARLY'
+                                ELSE CASE
+                                WHEN (  standard_start_time_stamp
+                                      + (  (xxoa_hr_late_early_ded_new.late_coming_grace_time
+                                           )
+                                         * (1 / 24 / 60)
+                                        )
+                                     ) < timedate_in
+                                   THEN 'LATE'
+                                ELSE 'GRACE TIME'
+                             END
+                             END
+                     END 
+				END time_in_status,
+                CASE WHEN (leave = 'REGULAR DAY' and admin_plan_yn = 'Y') then XXOA_HR_FLEXI_TIMMING_PKG.get_time_out_status(standard_start_time_stamp,standard_stop_time_stamp,timedate_out,punch_date,person_id,payroll_id)     
+                     ELSE                    
+     			     CASE
+                      WHEN leave = 'REGULAR DAY'
+                         THEN CASE
+                                WHEN standard_stop_time_stamp <
+                                                 timedate_out
+                                   THEN 'LATE'
+                                WHEN standard_stop_time_stamp =
+                                                 timedate_out
+                                   THEN 'ON TIME'
+                                ELSE CASE
+                                WHEN (  standard_stop_time_stamp
+                                      - (  (xxoa_hr_late_early_ded_new.early_going_grace_time
+                                           )
+                                         * (1 / 24 / 60)
+                                        )
+                                     ) > timedate_out
+                                   THEN 'EARLY'
+                                ELSE 'GRACE TIME'
+                             END
+                             END
+                     END
+				 END time_out_status,
+                 CASE
+                    WHEN leave = 'REGULAR DAY'
+                       THEN   CASE
+                                 WHEN timedate_out < timedate_in
+                                    THEN   24
+                                         * ((timedate_out + 1) - timedate_in
+                                           )
+                                 ELSE 24 * (timedate_out - timedate_in)
+                              END
+                            - CASE
+                                 WHEN standard_stop < standard_start
+                                    THEN   24
+                                         * (  (  TO_DATE (standard_stop,
+                                                          'HH24:MI'
+                                                         )
+                                               + 1
+                                              )
+                                            - TO_DATE (standard_start,
+                                                       'HH24:MI'
+                                                      )
+                                           )
+                                 ELSE   24
+                                      * (  TO_DATE (standard_stop, 'HH24:MI')
+                                         - TO_DATE (standard_start, 'HH24:MI')
+                                        )
+                              END
+                 END extra_hour
+                 ,admin_plan_yn
+				 ,email_address				 
+				 ,sup_email_address
+				 ,mgr_email_address
+                 ,hr_email_address 				 
+            FROM (SELECT papf.person_id, papf.employee_number emp_number,
+                         papf.full_name emp_name,
+                         NVL
+                            (xxoa_hr.get_parent_org
+                                  (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                                   paaf.organization_id,
+                                   'SBU',
+                                   'NAME'
+                                  ),
+                             xxoa_hr.get_parent_org
+                                  (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                                   paaf.organization_id,
+                                   'SU',
+                                   'NAME'
+                                  )
+                            ) sbu,
+                         xxoa_hr.get_parent_org
+                            (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                             paaf.organization_id,
+                             'DEPT',
+                             'NAME'
+                            ) department,
+                         xxoa_hr.get_parent_org
+                            (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                             paaf.organization_id,
+                             'SE',
+                             'NAME'
+                            ) section,
+                         pj.NAME job, pap.NAME POSITION, pg.NAME grade,
+                         bcd.calendar_date punch_date, hs.NAME shift_name,
+                         TO_CHAR
+                            (TO_DATE (TO_CHAR (hs.standard_start, '0000'),
+                                      'HH24MI'
+                                     ),
+                             'HH24:MI'
+                            ) standard_start,
+                         TO_CHAR
+                            (TO_DATE (TO_CHAR (hs.standard_stop, '0000'),
+                                      'HH24MI'
+                                     ),
+                             'HH24:MI'
+                            ) standard_stop,
+                             TO_DATE
+                              (   TO_CHAR (DECODE(hs.standard_start,'0',(bcd.calendar_date+1),bcd.calendar_date), 'DD-MON-RRRR')
+                               || ' '
+                               || TO_CHAR
+                                       (TO_DATE (TO_CHAR (hs.standard_start,
+                                                          '0000'
+                                                         ),
+                                                 'HH24MI'
+                                                ),
+                                        'HH24:MI'
+                                       ),
+                               'DD-MON-RRRR HH24:MI'
+                              ) standard_start_time_stamp,
+                        TO_DATE
+                              (   TO_CHAR (CASE WHEN hs.standard_start='0' THEN (bcd.calendar_date+1)
+                                                WHEN  TO_CHAR
+                            (TO_DATE (TO_CHAR (hs.standard_stop, '0000'),
+                                      'HH24MI'
+                                     ),
+                             'HH24:MI'
+                            ) < TO_CHAR
+                            (TO_DATE (TO_CHAR (hs.standard_start, '0000'),
+                                      'HH24MI'
+                                     ),
+                             'HH24:MI'
+                            )  THEN (bcd.calendar_date+1)
+                              ELSE 
+                              bcd.calendar_date END, 'DD-MON-RRRR')
+                               || ' '
+                               || TO_CHAR
+                                        (TO_DATE (TO_CHAR (hs.standard_stop,
+                                                           '0000'
+                                                          ),
+                                                  'HH24MI'
+                                                 ),
+                                         'HH24:MI'
+                                        ),
+                               'DD-MON-RRRR HH24:MI'
+                              ) standard_stop_time_stamp,
+                         xxoa_otl_actualtime_fns
+                                              (bcd.calendar_date,
+                                               papf.person_id,
+                                               'START_TIME'
+                                              ) timedate_in,
+                         xxoa_otl_actualtime_fns
+                                             (bcd.calendar_date,
+                                              papf.person_id,
+                                              'STOP_TIME'
+                                             ) timedate_out,
+                         xxoa_hr_get_leave_opt_fns
+                                                 (bcd.calendar_date,
+                                                  papf.person_id,
+                                                  haaif.earning_policy,
+                                                  hs.NAME
+                                                 ) leave,
+                         xxoa_otl_get_tothr_fns (bcd.calendar_date,
+                                                 papf.person_id
+                                                ) tot_hour,
+						 xxoa_hr_flexi_timming_pkg.validate_rotation_plan(paaf.assignment_id,paaf.payroll_id,bcd.calendar_date
+																		 ,hrp.name,haaif.effective_start_date,haaif.attribute1) admin_plan_yn,
+                         paaf.payroll_id,		
+                         nvl(papf.email_address, papf.attribute23) email_address,
+                         -- nvl(papf_sup.email_address, papf_sup.attribute23) sup_email_address,	Commented for SR 244742
+						-- Added for SR 244742 START
+						(SELECT nvl(papf_sup.email_address, papf_sup.attribute23) FROM apps.per_all_people_f papf1,apps.per_all_assignments_f paaf1,apps.per_all_people_f papf_sup 
+                       WHERE papf1.person_id=paaf1.person_id 
+                       AND papf1.person_id=papf.person_id
+                       and papf_sup.person_id  = paaf1.supervisor_id
+                       AND papf1.current_employee_flag='Y'
+                       AND paaf1.primary_flag='Y'
+                       AND (SYSDATE-1) Between papf1.effective_start_date and papf1.effective_end_date
+                       AND (SYSDATE-1) Between paaf1.effective_start_date and paaf1.effective_end_date
+                       AND (SYSDATE-1) Between papf_sup.effective_start_date and papf_sup.effective_end_date
+                       )sup_email_address,
+					   -- Added for SR 244742 END									
+                      --   nvl(papf_mgr.email_address, papf_mgr.attribute23) mgr_email_address,  -- commented for SR#366444
+					  (SELECT nvl(papf_mgr.email_address, papf_mgr.attribute23) FROM apps.per_all_people_f papf1,apps.per_all_assignments_f paaf1,apps.per_all_people_f papf_mgr 
+                       WHERE papf1.person_id=paaf1.person_id 
+                       AND papf1.person_id=papf.person_id
+                       AND papf_mgr.person_id=paaf1.ass_attribute8 
+                       AND papf1.current_employee_flag='Y'
+                       AND paaf1.primary_flag='Y'
+                       AND (SYSDATE-1) Between papf1.effective_start_date and papf1.effective_end_date
+                       AND (SYSDATE-1) Between paaf1.effective_start_date and paaf1.effective_end_date
+                       AND (SYSDATE-1) Between papf_mgr.effective_start_date and papf_mgr.effective_end_date
+                       )mgr_email_address,  --- Added for SR# 366444
+    	 				 xxoa_hr_flexi_timming_pkg.get_udt_value(bcd.calendar_date,'XXOA_FLEXITIME_VALIDATION_DETAILS',ppf.payroll_name,'HR Email') hr_email_address
+					FROM xxoa_otl_flexi_late_early_v ole,
+					     per_all_people_f papf,
+                         per_all_assignments_f paaf,
+                         per_jobs pj,
+                         per_all_positions pap,
+                         per_grades pg,
+                         hr_all_organization_units hou,
+                         per_periods_of_service pos,
+                         hxt_add_assign_info_f haaif,
+                         hxt_rotation_plans hrp,
+                         hxt_rotation_schedules hrs,
+                         hxt_work_shifts hws,
+                         xxoa_hr_calendar_v bcd,
+                         hxt_shifts hs,
+			             -- per_all_people_f papf_sup, Commented for SR 244742
+			            -- per_all_people_f papf_mgr,   commented for SR 366444
+						 pay_payrolls_f ppf
+                   WHERE 1 = 1
+				     AND papf.employee_number = ' 20001'
+                     AND ole.person_id = papf.person_id 
+                     AND papf.person_id = paaf.person_id
+                     AND papf.business_group_id = paaf.business_group_id
+                     AND paaf.primary_flag = 'Y'
+                     AND paaf.period_of_service_id = pos.period_of_service_id
+                     AND paaf.business_group_id = pos.business_group_id
+                     AND paaf.person_id = pos.person_id
+                     AND paaf.assignment_id = haaif.assignment_id
+					 --AND paaf.supervisor_id  = papf_sup.person_id(+) Commented for SR 244742
+					 -- AND paaf.ass_attribute8 = papf_mgr.person_id(+) Commented for SR 366444
+					 AND paaf.payroll_id = ppf.payroll_id
+                     AND paaf.job_id = pj.job_id(+)
+                     AND paaf.position_id = pap.position_id(+)
+                     AND pg.grade_id(+) = paaf.grade_id
+                     AND hou.organization_id = paaf.organization_id
+                     AND haaif.rotation_plan = hrp.ID
+                     AND hrp.ID = hrs.rtp_id
+                     AND hrs.start_date =
+                            (SELECT MAX (hrs_s.start_date)
+                               FROM hxt_rotation_schedules hrs_s
+                              WHERE 1 = 1
+                                AND hrs_s.start_date <=
+                                                     TRUNC (bcd.calendar_date)
+                                AND hrs_s.rtp_id = hrs.rtp_id)
+                     AND hrs.tws_id = hws.tws_id
+                     AND hws.week_day =
+                            UPPER (SUBSTR (TO_CHAR (bcd.calendar_date, 'day'),
+                                           1,
+                                           3
+                                          )
+                                  )
+                     AND hws.sht_id = hs.ID
+                     AND papf.business_group_id =
+                                   fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID')
+                     AND TRUNC (bcd.calendar_date)
+                            BETWEEN papf.effective_start_date
+                                AND papf.effective_end_date
+                     /*AND TRUNC (bcd.calendar_date)
+                            BETWEEN papf_sup.effective_start_date(+)
+                                AND papf_sup.effective_end_date(+) Commented for SR 244742*/
+                     /*AND TRUNC (bcd.calendar_date)
+                            BETWEEN papf_mgr.effective_start_date(+) 
+                                AND papf_mgr.effective_end_date(+)	Commented for SR 366444*/							
+					AND TRUNC (bcd.calendar_date)
+                            BETWEEN paaf.effective_start_date
+                                AND paaf.effective_end_date
+                     AND TRUNC (bcd.calendar_date) BETWEEN pos.date_start
+                                                       AND NVL
+                                                             (pos.actual_termination_date,
+                                                              bcd.calendar_date
+                                                             )
+                     AND TRUNC (bcd.calendar_date)
+                            BETWEEN haaif.effective_start_date
+                                AND haaif.effective_end_date
+                     AND TRUNC (bcd.calendar_date)
+                            BETWEEN hs.effective_start_date
+                                AND hs.effective_end_date
+                     AND TRUNC (bcd.calendar_date)
+                            BETWEEN ppf.effective_start_date
+                                AND trunc(nvl(ppf.effective_end_date,bcd.calendar_date+1))
+     				 AND hs.standard_start IS NOT NULL
+                     AND hs.standard_stop IS NOT NULL
+                     AND TRUNC (bcd.calendar_date) BETWEEN (select start_date 
+                                                              from xxoahr_le_deduction
+                                                            where trunc(sysdate - 1) between start_date and end_date and payroll_id = paaf.payroll_id)
+                                                       AND trunc(sysdate - 1)
+)
+)
+ORDER BY 4, 5, 6, 1, 10
+)
+where admin_plan_yn = 'Y' 
+  and yesterday_late_early_cnt = 1
+  and (time_in_status = 'LATE' or time_out_status = 'EARLY');	
