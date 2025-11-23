@@ -1,0 +1,61 @@
+<dataTemplate name="XXOAGLCCQWREP" version="1.0">
+  <properties>
+    <property name="xml_tag_case" value="UPPER"/>
+    <property name="debug_mode" value="ON"/>
+  </properties>
+  
+  <dataQuery>
+
+    <sqlStatement name="Q_MAIN">
+      <![CDATA[
+SELECT
+    org.organization_id,
+    lpad(' ', 10 *(level - 1))
+    || org.name hierarchy,
+    org.type,
+    pac.concatenated_segments,
+    pac.segment1   lob,
+    pac.segment2   rc,
+    to_char(pose.last_update_date, 'DD-MON-RRRR') as 'LAST_UPD_DATE'	
+FROM
+    hr_all_organization_units     org,
+    per_org_structure_elements    pose,
+    pay_cost_allocation_keyflex   pac
+WHERE
+    1 = 1
+    AND org.organization_id = pose.organization_id_child
+    AND org.cost_allocation_keyflex_id = pac.cost_allocation_keyflex_id (+)
+ AND pose.last_update_date >= '01-MAY-2025'
+       --and org.name like 'org name'
+START WITH
+    pose.organization_id_parent = (
+        SELECT
+            organization_id
+        FROM
+            hr_all_organization_units
+        WHERE
+            upper(name) = upper('WY Oman Air')
+            AND date_to IS NULL
+            AND type = 'DIV'
+    ) -- provide the id from which level the downward hierarchy should be displayed
+CONNECT BY
+    PRIOR pose.organization_id_child = pose.organization_id_parent
+ORDER SIBLINGS BY
+    org.location_id,
+    pose.organization_id_child
+	
+      ]]>
+    </sqlStatement>
+  </dataQuery>
+  <dataStructure>
+    <group name="G_MAIN" source="Q_MAIN">
+	<element name="ORGANIZATION_ID"         datatype="VARCHAR2" value="ORGANIZATION_ID"/>
+	 <element name="HIERARCHY"              datatype="VARCHAR2" value="HIERARCHY"/>
+	 <element name="TYPE"                   datatype="VARCHAR2" value="TYPE"/>
+	 <element name="CONCATENATED_SEGMENTS"  datatype="VARCHAR2" value="CONCATENATED_SEGMENTS"/>
+      <element name="RC"                    datatype="VARCHAR2" value="RC"/>
+      <element name="LOB"                   datatype="VARCHAR2" value="LOB"/>
+      <element name="LAST_UPDATED_DATE"     datatype="VARCHAR2" value="LAST_UPDATED_DATE"/>
+    </group>
+  </dataStructure>
+</dataTemplate>
