@@ -1,0 +1,243 @@
+<dataTemplate name="XXOAHREMPEXTHDREP" version="1.0">
+  <properties>
+    <property name="xml_tag_case" value="UPPER"/>
+    <property name="debug_mode" value="ON"/>
+  </properties>
+  <parameters>
+    <parameter name="P_DATE_FROM" dataType="DATE"/>
+    <parameter name="P_DATE_TO" dataType="DATE"/>
+    <parameter name="P_EMP_GROUP" dataType="VARCHAR2"/>
+    <parameter name="P_PAYROLL_NAME" dataType="VARCHAR2"/>
+    <parameter name="P_EMP_NO" dataType="VARCHAR2"/>
+  </parameters>
+  
+  <dataQuery>
+  <sqlStatement name="Q_MAIN4">
+<![CDATA[
+select 
+	TO_CHAR(:P_DATE_FROM,'DD-MON-RRRR') DATE_FROM,TO_CHAR(:P_DATE_TO,'DD-MON-RRRR') DATE_TO,
+    (select MEANING from 
+		fnd_lookup_values flv
+		where 1=1 AND flv.lookup_type (+) = 'XXOA_HQ_EMPLOYEE_GROUP'
+		and LOOKUP_CODE = :P_EMP_GROUP 
+		and LANGUAGE ='US')as EMP_GROUP,
+    (select payroll_name from apps.pay_payrolls_f where payroll_id = :p_payroll_name 
+         and rownum = 1) as PY_NAME,
+    (select Employee_number from per_all_people_f where person_id = :p_emp_no and trunc(sysdate) between effective_start_date and effective_end_date 
+     and rownum = 1) as PEMP_NO
+from dual
+]]>
+</sqlStatement>
+
+    <sqlStatement name="Q_MAIN">
+      <![CDATA[
+SELECT
+    emp_number,
+    emp_name,
+    TO_CHAR(calendar_date,'DD-Mon-YYYY') calendar_date,
+    xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), organization_id, 'SBU', 'NAME') sbu,
+    xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), organization_id, 'DEPT', 'NAME') department,
+    xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), organization_id, 'SE', 'NAME') section,
+    (
+        SELECT
+            name
+        FROM
+            per_grades
+        WHERE
+            grade_id = grd_id
+    ) grade,
+    employee_type,
+    employee_group,
+    to_char(punch_date, 'DD-MON-RRRR') punch_date,
+    shift_name,
+    shift_in,
+    shift_out,
+    time_in,
+    time_out,
+    CASE
+        WHEN extra_hour > 0 THEN
+            to_char(trunc((extra_hour * 3600) / 3600), 'FM9900')
+            || ':'
+            || to_char(trunc(mod((extra_hour * 3600), 3600) / 60), 'FM00')
+    END extra_hour,
+    CASE
+        WHEN tot_hour > 0 THEN
+            to_char(trunc((tot_hour * 3600) / 3600), 'FM9900')
+            || ':'
+            || to_char(trunc(mod((tot_hour * 3600), 3600) / 60), 'FM00')
+    END total_hours
+FROM
+    (
+        SELECT
+            person_id,
+            emp_number,
+            emp_name,
+            calendar_date,
+            organization_id,
+            grd_id,
+            employee_type,
+            employee_group,
+            punch_date,
+            shift_name,
+            standard_start   shift_in,
+            standard_stop    shift_out,
+            nvl(lpad(to_char(timedate_in, 'HH24:MI'), '5', '0'), 0) time_in,
+            nvl(lpad(to_char(timedate_out, 'HH24:MI'), '5', '0'), 0) time_out,
+            leave,
+            tot_hour,
+            CASE
+                WHEN leave = 'REGULAR DAY' THEN
+                        CASE
+                            WHEN timedate_out < timedate_in THEN
+                                24 * ( ( timedate_out + 1 ) - timedate_in )
+                            ELSE
+                                24 * ( timedate_out - timedate_in )
+                        END
+                        -
+                        CASE
+                            WHEN standard_stop < standard_start THEN
+                                24 * ( ( to_date(standard_stop, 'HH24:MI') + 1 ) - to_date(standard_start, 'HH24:MI') )
+                            ELSE
+                                24 * ( to_date(standard_stop, 'HH24:MI') - to_date(standard_start, 'HH24:MI') )
+                        END
+            END extra_hour,
+            assignment_id,
+            payroll_id
+        FROM
+            (
+                SELECT
+                    papf.person_id,
+                    papf.employee_number   emp_number,
+                    bcd.calendar_date,
+                    paaf.organization_id,
+                    paaf.grade_id          grd_id,
+                    flv1.meaning           employee_type,
+                    flv.meaning            employee_group,
+                    papf.full_name         emp_name,
+                    bcd.calendar_date      punch_date,
+                    hs.name                shift_name,
+                    to_char(to_date(to_char(hs.standard_start, '0000'), 'HH24MI'), 'HH24:MI') standard_start,
+                    to_char(to_date(to_char(hs.standard_stop, '0000'), 'HH24MI'), 'HH24:MI') standard_stop,
+                    to_date(to_char(decode(hs.standard_start, '0',(bcd.calendar_date + 1), bcd.calendar_date), 'DD-MON-RRRR')
+                            || ' '
+                            || to_char(to_date(to_char(hs.standard_start, '0000'), 'HH24MI'), 'HH24:MI'), 'DD-MON-RRRR HH24:MI') standard_start_time_stamp
+                            ,
+                    to_date(to_char(
+                        CASE
+                            WHEN hs.standard_start = '0' THEN
+                                (bcd.calendar_date + 1)
+                            WHEN to_char(to_date(to_char(hs.standard_stop, '0000'), 'HH24MI'), 'HH24:MI') < to_char(to_date(to_char
+                            (hs.standard_start, '0000'), 'HH24MI'), 'HH24:MI') THEN
+                                (bcd.calendar_date + 1)
+                            ELSE
+                                bcd.calendar_date
+                        END, 'DD-MON-RRRR')
+                            || ' '
+                            || to_char(to_date(to_char(hs.standard_stop, '0000'), 'HH24MI'), 'HH24:MI'), 'DD-MON-RRRR HH24:MI') standard_stop_time_stamp
+                            ,
+                    xxoa_otl_actualtime_fns(bcd.calendar_date, papf.person_id, 'START_TIME') timedate_in,
+                    xxoa_otl_actualtime_fns(bcd.calendar_date, papf.person_id, 'STOP_TIME') timedate_out,
+                    xxoa_hr_get_leave_opt_fns(bcd.calendar_date, papf.person_id, haaif.earning_policy, hs.name) leave,
+                    xxoa_otl_get_tothr_fns(bcd.calendar_date, papf.person_id) tot_hour,
+                    paaf.assignment_id,
+                    paaf.payroll_id
+                FROM
+                    per_all_people_f         papf,
+                    per_all_assignments_f    paaf,
+                    per_periods_of_service   pos,
+                    hxt_add_assign_info_f    haaif,
+                    hxt_rotation_plans       hrp,
+                    hxt_rotation_schedules   hrs,
+                    hxt_work_shifts          hws,
+                    xxoa_hr_calendar_v       bcd,
+                    hxt_shifts               hs,
+                   -- per_person_analyses      ppa,
+                   -- per_analysis_criteria    pac,
+                  --  fnd_id_flex_structures   fifs,
+                    pay_payrolls_f           ppf,
+                    fnd_lookup_values        flv1,
+                    pay_people_groups        ppg,
+                    fnd_lookup_values        flv
+                WHERE
+                    1 = 1
+                    AND ppg.people_group_id (+) = paaf.people_group_id
+                    AND ppg.segment2 = flv1.lookup_code (+)
+                    AND flv1.lookup_type (+) = 'XXOA_HQ_EMPLOYEE_TYPE'
+                    AND flv.lookup_type (+) = 'XXOA_HQ_EMPLOYEE_GROUP'
+                    AND flv.language (+) = 'US'
+                    AND ppg.segment1 = flv.lookup_code (+)
+                    ------AND flv.meaning  ='Non flying Staff'
+					----AND flv.LOOKUP_CODE = nvl(:P_EMP_GROUP,flv.LOOKUP_CODE)
+					AND ppg.segment1 = nvl(:P_EMP_GROUP,ppg.segment1)
+                    AND flv1.language (+) = 'US'
+                    AND papf.person_id = paaf.person_id
+                    AND papf.business_group_id = paaf.business_group_id
+                    AND paaf.payroll_id = ppf.payroll_id--341
+                    AND ppf.payroll_id = :P_PAYROLL_NAME
+					AND papf.person_id = nvl( :P_EMP_NO,papf.person_id )
+                    AND trunc(bcd.calendar_date) BETWEEN to_date(:DATE_FROM) AND to_date(:DATE_TO)
+                    AND paaf.primary_flag = 'Y'
+                    AND paaf.period_of_service_id = pos.period_of_service_id
+                    AND paaf.business_group_id = pos.business_group_id
+                    AND paaf.person_id = pos.person_id
+                    AND paaf.assignment_id = haaif.assignment_id
+                    AND haaif.rotation_plan = hrp.id
+                    AND hrp.id = hrs.rtp_id
+                    AND hrs.start_date = (
+                        SELECT
+                            MAX(hrs_s.start_date)
+                        FROM
+                            hxt_rotation_schedules hrs_s
+                        WHERE
+                            1 = 1
+                            AND hrs_s.start_date <= trunc(bcd.calendar_date)
+                            AND hrs_s.rtp_id = hrs.rtp_id
+                    )
+                    AND hrs.tws_id = hws.tws_id
+                    AND hws.week_day = upper(substr(to_char(bcd.calendar_date, 'day'), 1, 3))
+                    AND hws.sht_id = hs.id
+                    AND papf.business_group_id = 81
+                    AND trunc(sysdate) BETWEEN papf.effective_start_date AND papf.effective_end_date
+                    AND nvl(papf.current_employee_flag, 'N') = 'Y'
+                    AND trunc(bcd.calendar_date) BETWEEN paaf.effective_start_date AND paaf.effective_end_date
+                    AND trunc(bcd.calendar_date) BETWEEN pos.date_start AND nvl(pos.actual_termination_date, bcd.calendar_date)
+                    AND trunc(bcd.calendar_date) BETWEEN haaif.effective_start_date AND haaif.effective_end_date
+                    AND trunc(bcd.calendar_date) BETWEEN hs.effective_start_date AND hs.effective_end_date
+                    AND hs.standard_start IS NOT NULL
+                    AND hs.standard_stop IS NOT NULL
+            )
+    )
+    where extra_hour > 0
+ORDER BY 1,calendar_date
+      ]]>
+    </sqlStatement>
+  </dataQuery>
+  <dataStructure>
+	<group name="G_MAIN4" source="Q_MAIN4">
+    <element name="DATE_FROM"      datatype="DATE"      value="DATE_FROM"/>
+    <element name="DATE_TO"        datatype="DATE"      value="DATE_TO"/>
+    <element name="EMP_GROUP"      datatype="VARCHAR2"  value="EMP_GROUP"/>
+    <element name="PY_NAME"     datatype="VARCHAR2"    value="PY_NAME"/>
+    <element name="PEMP_NO"      datatype="VARCHAR2"    value="PEMP_NO"/>
+    </group>
+    <group name="G_MAIN" source="Q_MAIN">
+      <element name="EMP_NUMBER"    datatype="VARCHAR2" value="EMP_NUMBER"/>
+      <element name="EMP_NAME"      datatype="VARCHAR2" value="EMP_NAME"/>
+      <element name="CALENDAR_DATE" datatype="VARCHAR2" value="CALENDAR_DATE"/>
+      <element name="SBU"           datatype="VARCHAR2" value="SBU"/>
+      <element name="DEPARTMENT"    datatype="VARCHAR2" value="DEPARTMENT"/>
+      <element name="SECTION"       datatype="VARCHAR2" value="SECTION"/>
+      <element name="GRADE"         datatype="VARCHAR2" value="GRADE"/>
+      <element name="EMPLOYEE_TYPE" datatype="VARCHAR2" value="EMPLOYEE_TYPE"/>
+      <element name="EMPLOYEE_GROUP" datatype="VARCHAR2" value="EMPLOYEE_GROUP"/>
+      <element name="PUNCH_DATE"    datatype="VARCHAR2" value="PUNCH_DATE"/>
+      <element name="SHIFT_NAME"    datatype="VARCHAR2" value="SHIFT_NAME"/>
+      <element name="SHIFT_IN"      datatype="VARCHAR2" value="SHIFT_IN"/>
+      <element name="SHIFT_OUT"     datatype="VARCHAR2" value="SHIFT_OUT"/>
+      <element name="TIME_IN"       datatype="VARCHAR2" value="TIME_IN"/>
+      <element name="TIME_OUT"      datatype="VARCHAR2" value="TIME_OUT"/>
+      <element name="EXTRA_HOUR"    datatype="VARCHAR2" value="EXTRA_HOUR"/>
+      <element name="TOTAL_HOURS"   datatype="VARCHAR2" value="TOTAL_HOURS"/>
+    </group>
+  </dataStructure>
+</dataTemplate>
