@@ -1,0 +1,121 @@
+<dataTemplate name="XXOAHREMPDEPMEDINSREQREP" version="1.0">
+  <properties>
+    <property name="xml_tag_case" value="UPPER"/>
+    <property name="debug_mode" value="ON"/>
+  </properties>
+  <parameters>
+      <parameter name="P_EMP_NO" dataType="VARCHAR2"/>
+	  <parameter name="P_PAYROLL_NAME" dataType="NUMBER"/>
+      <parameter name="P_EFFECTIVE_DATE" dataType="DATE"/>
+  </parameters>
+  
+  <dataQuery>
+    <sqlStatement name="Q_MAIN4">
+<![CDATA[
+select 
+	TO_CHAR(:P_EFFECTIVE_DATE,'DD-MON-RRRR') EFFECTIVE_DATE,
+    (select payroll_name from apps.pay_payrolls_f where payroll_id = :P_PAYROLL_NAME and rownum = 1) as PY_NAME,
+    (select Employee_number from per_all_people_f where person_id = :P_EMP_NO and trunc(sysdate) between effective_start_date and effective_end_date and rownum = 1) as PEMP_NO
+from dual
+]]>
+</sqlStatement>
+
+    <sqlStatement name="Q_MAIN">
+      <![CDATA[
+SELECT  papf.employee_number employee_number,papf.full_name,
+(select name from per_grades where grade_id = paaf.grade_id) Grade
+			,xxoa_hr.get_parent_org  (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                              paaf.organization_id,
+                              'SBU',
+                              'NAME'
+                             ) sbu,
+						xxoa_hr.get_parent_org
+                      (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                       paaf.organization_id,
+                       'DEPT',
+                       'NAME'
+                      ) department,
+                            xxoa_hr.get_parent_org
+                         (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                          paaf.organization_id,
+                          'SE',
+                          'NAME'
+                         ) section,
+   ppf.payroll_name Payroll,                      
+ (select papf1.full_name
+from per_contact_relationships pcr,per_all_people_f papf1,hr_lookups hl
+where 1=1
+AND pcr.contact_person_id = papf1.person_id 
+and pcr.person_id = papf.person_id
+and papf1.person_id =segment1
+AND papf1.business_group_id = pcr.business_group_id 
+AND hl.lookup_type = 'CONTACT' 
+AND hl.lookup_code = pcr.contact_type 
+AND hl.enabled_flag = 'Y' 
+AND trunc(SYSDATE) BETWEEN papf1.effective_start_date AND papf1.effective_end_date)
+                 "Dependent name",
+ hl.meaning "Relationship Type",
+ decode (segment3,'Y','Yes','No') "Maternity Coverage" ,
+ decode (segment4,'Y','Yes','No') "Dental Coverage",
+ decode (segment5,'Y','Yes','No')"Optical Coverage",
+ h2.meaning "Scan Documents Attached",
+                segment7 "Please Note",
+                to_char(to_date(segment8),'DD-Mon-RRRR') "Date of Application",
+                segment9 "Comments"
+         FROM per_all_people_f papf,
+                per_person_analyses ppa,
+                per_analysis_criteria pac,
+                fnd_id_flex_structures fifs,
+                per_all_assignments_f paaf, hr_lookups h2,hr_lookups hl
+                ,pay_payrolls_f ppf
+          WHERE papf.person_id = ppa.person_id
+          and papf.employee_number  = :P_EMP_NO
+          and ppf.payroll_id = paaf.payroll_id
+          and ppf.payroll_id = :P_PAYROLL_NAME
+          AND h2.lookup_type = 'XXOA_MEDICAL_INSURANCE_DOCS' 
+          AND h2.lookup_code = segment6
+          AND h2.enabled_flag = 'Y'
+          AND hl.lookup_type = 'CONTACT' 
+          AND hl.lookup_code = segment2
+          AND hl.enabled_flag = 'Y'
+            AND   paaf.primary_flag             = 'Y'
+            AND paaf.person_id             = papf.person_id
+            AND ppa.analysis_criteria_id = pac.analysis_criteria_id
+            AND pac.id_flex_num = fifs.id_flex_num
+            AND TRUNC (ppa.creation_date) BETWEEN papf.effective_start_date AND papf.effective_end_date
+           AND Trunc(sysdate)  BETWEEN paaf.effective_start_date  AND paaf.effective_end_date
+           AND Trunc(sysdate)  BETWEEN ppf.effective_start_date  AND ppf.effective_end_date
+            AND fifs.id_flex_structure_code = 'OA_MEDICAL_INSURANCE_REQ'
+            order by papf.employee_number,pac.CREATION_DATE ;
+      ]]>
+	  
+    </sqlStatement>
+  </dataQuery>
+  <dataStructure>
+  
+  	<group name="G_MAIN4" source="Q_MAIN4">
+      <element name="PY_NAME"          datatype="VARCHAR2" value="PY_NAME"/>
+      <element name="PEMP_NO"      datatype="VARCHAR2"    value="PEMP_NO"/>
+      <element name="EFFECTIVE_DATE" datatype="VARCHAR2"     value="EFFECTIVE_DATE"/>
+    </group>
+	
+    <group name="G_MAIN" source="Q_MAIN">
+	  <element name="EMP_NUMBER"     datatype="VARCHAR2" value="EMP_NUMBER"/>
+      <element name="FULL_NAME"           datatype="VARCHAR2" value="FULL_NAME"/>
+      <element name="GRADE"               datatype="VARCHAR2" value="GRADE"/>
+      <element name="SBU"                 datatype="VARCHAR2" value="SBU"/>
+      <element name="DEPARTMENT"          datatype="VARCHAR2" value="DEPARTMENT"/>
+      <element name="SECTION"             datatype="VARCHAR2" value="SECTION"/>
+      <element name="PAYROLL"             datatype="VARCHAR2" value="PAYROLL"/>
+      <element name="DEPENDENT_NAME"      datatype="VARCHAR2" value="DEPENDENT_NAME"/>
+      <element name="RELATIONSHIP_TYPE"   datatype="VARCHAR2" value="RELATIONSHIP_TYPE"/>
+      <element name="MATERNITY_COVERAGE"  datatype="VARCHAR2" value="MATERNITY_COVERAGE"/>
+      <element name="DENTAL_COVERAGE"     datatype="VARCHAR2" value="DENTAL_COVERAGE"/>
+      <element name="OPTICAL_COVERAGE"    datatype="VARCHAR2" value="OPTICAL_COVERAGE"/>
+      <element name="SCAN_DOCS_ATTACHED"  datatype="VARCHAR2" value="SCAN_DOCS_ATTACHED"/>
+      <element name="PLEASE_NOTE"         datatype="VARCHAR2" value="PLEASE_NOTE"/>
+      <element name="DATE_OF_APPLICATION" datatype="DATE"     value="DATE_OF_APPLICATION"/>
+      <element name="COMMENTS"            datatype="VARCHAR2" value="COMMENTS"/>
+    </group>
+  </dataStructure>
+</dataTemplate>
