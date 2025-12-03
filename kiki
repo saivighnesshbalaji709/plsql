@@ -1,21 +1,27 @@
 SELECT 
     papf.person_id,
-    papf.full_name         AS employee_name,
-    papf.employee_number   AS employee_number,
-    hou.organization_id,
-    hou.name               AS department_name
-FROM
-    fnd_user fu,
-    per_all_people_f papf,
-    per_all_assignments_f paaf,
-    hr_organization_units hou
-WHERE
-    fu.employee_id = papf.person_id
-AND paaf.person_id = papf.person_id
-AND hou.organization_id = paaf.organization_id
-AND fu.user_name = :p_username
--- current person record
-AND SYSDATE BETWEEN papf.effective_start_date AND papf.effective_end_date
--- current assignment record (primary only)
-AND SYSDATE BETWEEN paaf.effective_start_date AND paaf.effective_end_date
-AND NVL(paaf.primary_flag, 'N') = 'Y';
+    papf.full_name AS employee_name,
+    papf.employee_number AS employee_number,
+    parent_hou.organization_id AS department_id,
+    parent_hou.name AS department_name,
+    child_hou.organization_id AS section_id,
+    child_hou.name AS section_name
+FROM 
+    fnd_user fu
+    JOIN per_all_people_f papf ON fu.employee_id = papf.person_id
+    JOIN per_all_assignments_f paaf ON papf.person_id = paaf.person_id
+    JOIN hr_all_organization_units parent_hou ON paaf.organization_id = parent_hou.organization_id
+    JOIN per_org_structure_elements pose 
+        ON pose.organization_id_parent = parent_hou.organization_id
+    JOIN per_organization_structures pos 
+        ON pose.org_structure_version_id = pos.organization_structure_id
+    JOIN hr_all_organization_units child_hou 
+        ON pose.organization_id_child = child_hou.organization_id
+WHERE 
+    fu.user_name = :p_username
+    AND pos.name = 'OA HQ Organization Hieararchy'  -- same hierarchy used in your package
+    AND SYSDATE BETWEEN papf.effective_start_date AND papf.effective_end_date
+    AND SYSDATE BETWEEN paaf.effective_start_date AND paaf.effective_end_date
+ORDER BY 
+    parent_hou.name, child_hou.name;
+
