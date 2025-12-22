@@ -288,3 +288,306 @@ async def analyze_case(request: Request):
             status_code=500,
             content={"error": str(e)}
         )
+
+-------------------------
+
+
+      Perfect 👍
+Now you’re at the **polish & presentation stage** — this is exactly where projects start **impressing judges**.
+
+We’ll do **3 clean upgrades**, without breaking your backend logic:
+
+---
+
+## 🎯 WHAT WE WILL FIX
+
+### 1️⃣ Output should be **clean text**
+
+* ❌ No ```json
+* ❌ No quotes around everything
+* ✅ Readable sections: Analysis, Risk, Decision
+
+### 2️⃣ Show a **loading indicator**
+
+* While agent is thinking (very important for UX)
+
+### 3️⃣ Make the dashboard **interactive & presentable**
+
+* Sections
+* Colors
+* Status badge (APPROVED / CONDITIONAL / REJECTED)
+
+All of this is **frontend + small backend cleanup only**.
+
+---
+
+# ✅ BACKEND CHANGE (VERY SMALL & SAFE)
+
+Your backend currently returns **raw strings** that still contain:
+
+```
+json
+{
+ ...
+}
+```
+
+We’ll **clean that once**, centrally.
+
+### 🔧 Add this helper in `utils.py`
+
+````python
+import re
+
+def clean_text(text: str) -> str:
+    if not text:
+        return ""
+
+    # Remove ```json, ``` and similar markers
+    text = re.sub(r"```.*?\n", "", text)
+    text = text.replace("```", "")
+    text = text.replace("json\n", "")
+    text = text.strip()
+
+    return text
+````
+
+---
+
+### 🔧 Use it in `workflow.py` (before returning)
+
+```python
+from utils import clean_text
+
+return {
+    "analysis": clean_text(analysis),
+    "risk": clean_text(risk),
+    "decision": clean_text(decision)
+}
+```
+
+✅ Backend now sends **plain readable text**
+No JSON tags, no quotes.
+
+---
+
+# 🎨 FRONTEND UPGRADE (THIS IS THE WOW PART)
+
+Replace your **entire `index.html`** with this 👇
+(It’s still simple HTML/CSS/JS — beginner-safe)
+
+---
+
+## ✅ `templates/index.html`
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Agentic Legal Risk Analyzer</title>
+    <style>
+        body {
+            font-family: "Segoe UI", sans-serif;
+            background: #eef2f7;
+            padding: 40px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            max-width: 900px;
+            margin: auto;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 14px;
+            border-radius: 6px;
+        }
+
+        button {
+            margin-top: 15px;
+            padding: 12px;
+            width: 100%;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .loading {
+            display: none;
+            margin-top: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .section {
+            margin-top: 25px;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .analysis { background: #f0f9ff; }
+        .risk { background: #fff7ed; }
+        .decision { background: #f0fdf4; }
+
+        .title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .CONDITIONAL { background: #fde68a; }
+        .APPROVED { background: #86efac; }
+        .REJECTED { background: #fca5a5; }
+
+        pre {
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+    <h2>⚖️ Agentic Legal Risk Analyzer</h2>
+
+    <p>Enter case input (JSON):</p>
+
+    <textarea id="input" rows="8">
+{
+  "operation": "EU customer data processed by Indian vendor",
+  "countries": ["Germany", "India"],
+  "data": ["PII", "Sensitive"],
+  "urgency": "HIGH"
+}
+    </textarea>
+
+    <button onclick="analyze()">Analyze Risk</button>
+
+    <div class="loading" id="loading">
+        ⏳ Analyzing case using Agentic AI...
+    </div>
+
+    <div id="results" style="display:none;">
+        <div class="section analysis">
+            <div class="title">📘 Analysis</div>
+            <pre id="analysis"></pre>
+        </div>
+
+        <div class="section risk">
+            <div class="title">⚠️ Risk Assessment</div>
+            <pre id="risk"></pre>
+        </div>
+
+        <div class="section decision">
+            <div class="title">
+                🎯 Decision
+                <span id="badge" class="badge"></span>
+            </div>
+            <pre id="decision"></pre>
+        </div>
+    </div>
+</div>
+
+<script>
+async function analyze() {
+    document.getElementById("results").style.display = "none";
+    document.getElementById("loading").style.display = "block";
+
+    try {
+        const input = document.getElementById("input").value;
+
+        const response = await fetch("/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: input
+        });
+
+        const data = await response.json();
+
+        document.getElementById("analysis").textContent = data.analysis;
+        document.getElementById("risk").textContent = data.risk;
+        document.getElementById("decision").textContent = data.decision;
+
+        // Badge logic
+        let badge = document.getElementById("badge");
+        if (data.decision.includes("APPROVED")) badge.className = "badge APPROVED";
+        else if (data.decision.includes("REJECTED")) badge.className = "badge REJECTED";
+        else badge.className = "badge CONDITIONAL";
+
+        badge.textContent = badge.className.replace("badge ", "");
+
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("results").style.display = "block";
+
+    } catch (err) {
+        document.getElementById("loading").textContent =
+            "❌ Error occurred. Check backend logs.";
+    }
+}
+</script>
+
+</body>
+</html>
+```
+
+---
+
+# 🟢 WHAT YOU ACHIEVED NOW (IMPORTANT)
+
+✅ Clean text output
+✅ No JSON clutter
+✅ Loading indicator
+✅ Interactive dashboard
+✅ Decision badge (visual clarity)
+
+This now looks like a **real internal compliance tool**, not a demo.
+
+---
+
+# 🎤 HOW TO EXPLAIN THIS TO JUDGES
+
+Say this confidently:
+
+> “Since agent reasoning can take time, we added a loading state and structured UI sections. We also clean and normalize AI outputs to make them readable for non-technical decision makers.”
+
+🔥 That sentence = polish + maturity.
+
+---
+
+# 🚀 OPTIONAL NEXT (only if time)
+
+* Confidence score bar
+* Download report button
+* History of previous analyses
+* Dark mode toggle
+
+---
+
+If you want, next I can:
+
+* Help you rehearse **final demo script**
+* Prepare **judge questions & answers**
+* Add **one killer slide** explaining agentic flow
+
+You’ve built something solid — well done 👏
+
