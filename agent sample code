@@ -1,0 +1,424 @@
+
+import os
+import json
+import asyncio
+from typing import Dict, Any
+from dotenv import load_dotenv
+from azure.identity import ClientSecretCredential
+from azure.ai.agents import AgentsClient
+
+load_dotenv()
+
+class MultiAgentWorkflow:
+    """
+    Cross-Jurisdictional Legal Real-Time Risk Modeling
+    --------------------------------------------------
+    This workflow coordinates Azure AI Agents to:
+    1) Normalize case facts and map jurisdictions/regulatory frameworks
+    2) Compute real-time multi-dimensional legal risk scores
+    3) Resolve conflicts of law and recommend a safe operating path
+    4) Produce an executive decision with conditions and next steps
+
+    ⚠️ Not legal advice. Use for decision support only.
+    """
+
+    def __init__(self):
+        """Initialize multi-agent system"""
+        print("🔧 Initializing Cross-Jurisdictional Legal Risk Workflow...")
+
+        # Initialize Azure AI client
+        self.credential = ClientSecretCredential(
+            tenant_id=os.getenv("TENANT_ID"),
+            client_id=os.getenv("CLIENT_ID"),
+            client_secret=os.getenv("CLIENT_SECRET")
+        )
+
+        self.client = AgentsClient(
+            endpoint=os.getenv("PROJECT_ENDPOINT"),
+            credential=self.credential
+        )
+
+        # In production, you might use multiple specialized agents.
+        # For this example, we'll use the same agent for all tasks.
+        self.agent_id = os.getenv("AGENT_ID")
+
+        print("✅ Legal Risk Workflow ready!")
+
+    async def create_thread(self):
+        """Create a new conversation thread"""
+        thread = self.client.threads.create()
+        return thread.id
+
+    async def run_agent_task(self, thread_id: str, task_prompt: str, task_name: str):
+        """
+        Run a specific task with the agent and return textual response.
+        Prompts should instruct the agent to return structured JSON where possible.
+        """
+        print(f"🎯 Starting task: {task_name}")
+
+        # Send task prompt to agent
+        self.client.messages.create(
+            thread_id=thread_id,
+            role="user",
+            content=task_prompt
+        )
+
+        # Execute the agent
+        run = self.client.runs.create(
+            thread_id=thread_id,
+            agent_id=self.agent_id
+        )
+
+        # Wait for completion
+        while run.status in ("queued", "in_progress"):
+            await asyncio.sleep(1)
+            run = self.client.runs.get(thread_id=thread_id, run_id=run.id)
+
+        # Get the response
+        messages = list(self.client.messages.list(thread_id=thread_id))
+
+        # Extract latest assistant response
+        for message in messages:
+            if message.role == "assistant":
+                if hasattr(message.content, '__iter__'):
+                    for content_item in message.content:
+                        if hasattr(content_item, 'text'):
+                            result = content_item.text
+                            print(f"✅ {task_name} completed")
+                            return result
+
+        return f"Task {task_name} completed but no response received"
+
+    async def execute_workflow(self, input_data: Dict[str, Any]):
+        """
+        Execute the cross-jurisdictional legal risk workflow:
+          Step 1: Legal Fact Normalization & Jurisdiction Mapping
+          Step 2: Real-Time Risk Modeling
+          Step 3: Conflict-of-Laws Resolution & Safe Path Design
+          Step 4: Executive Decision
+        """
+        print(f"\n{'='*80}")
+        print(f"🚀 STARTING CROSS-JURISDICTIONAL LEGAL RISK WORKFLOW")
+        print(f"{'='*80}")
+
+        workflow_results = {
+            "input": input_data,
+            "steps": {},
+            "status": "in_progress"
+        }
+
+        try:
+            # STEP 1: Legal Fact Normalization & Jurisdiction Mapping
+            print(f"\n📚 STEP 1: Legal Fact Normalization & Jurisdiction Mapping")
+            thread_1 = await self.create_thread()
+
+            analysis_prompt = f"""
+            You are a Legal Intelligence Agent specializing in cross-jurisdictional compliance.
+
+            TASK: Normalize the case facts and map applicable jurisdictions, regulatory frameworks,
+            and obligations. Identify conflict-of-law vectors and extraterritorial reach.
+
+            INPUT CASE FACTS (JSON):
+            {json.dumps(input_data, indent=2)}
+
+            Please provide ONLY a structured JSON object with the following keys:
+            {{
+              "entities": [{{"name": "...","role":"controller|processor|vendor","country":"..."}} ],
+              "operations": [{{"type":"...","description":"...","legal_triggers":["..."]}} ],
+              "jurisdictions": ["EU-DE","EU-FR","US-CA","IN","UK","..."],
+              "frameworks": [
+                {{"name":"GDPR","articles":["Art.3","Art.44-49","..."],"applicability":"..."}},
+                {{"name":"CCPA/CPRA","sections":["1798.120","..."],"applicability":"..."}},
+                {{"name":"DPDP Act (India)","sections":["..."],"applicability":"..."}}
+              ],
+              "data_categories": ["PII","Sensitive","Health","Financial","Children","..."],
+              "transfer_mechanisms": ["SCCs","BCRs","DPA","Localization","..."],
+              "conflict_vectors": [
+                {{"description":"...","type":"export_controls|privacy|labor|tax|consumer","jurisdictions":["..."]}}
+              ],
+              "notes": ["..."]
+            }}
+
+            Constraints:
+            - Focus on jurisdictional scope, sectoral reach, and obligations.
+            - Flag cross-border transfers, special categories, and localization requirements.
+            - DO NOT include prose outside the JSON. Return ONLY JSON.
+            """
+
+            analysis_result = await self.run_agent_task(
+                thread_1,
+                analysis_prompt,
+                "Legal Fact Normalization & Jurisdiction Mapping"
+            )
+            workflow_results["steps"]["jurisdiction_mapping"] = analysis_result
+
+            # STEP 2: Real-Time Risk Modeling
+            print(f"\n⚖️  STEP 2: Real-Time Risk Modeling")
+            thread_2 = await self.create_thread()
+
+            risk_prompt = f"""
+            You are a Legal Risk Modeling Agent.
+
+            TASK: Produce multi-dimensional risk scores and prioritized mitigations based on:
+            - Original case facts
+            - Jurisdiction mapping and frameworks from STEP 1
+
+            ORIGINAL CASE FACTS:
+            {json.dumps(input_data, indent=2)}
+
+            JURISDICTION MAPPING (JSON from Step 1):
+            {analysis_result}
+
+            Return ONLY a structured JSON with keys:
+            {{
+              "risk_dimensions": [
+                {{
+                  "dimension":"Regulatory Enforcement",
+                  "likelihood":0.0-1.0,
+                  "impact":0-100,
+                  "level":"LOW|MODERATE|HIGH|CRITICAL",
+                  "factors":["..."],
+                  "references":["GDPR Art.44","CPRA 1798.120","..."]
+                }},
+                {{
+                  "dimension":"Civil Liability",
+                  "likelihood":0.0-1.0,
+                  "impact":0-100,
+                  "level":"LOW|MODERATE|HIGH|CRITICAL",
+                  "factors":["..."],
+                  "references":["..."]
+                }},
+                {{
+                  "dimension":"Contractual Breach",
+                  ...
+                }},
+                {{
+                  "dimension":"Operational Continuity",
+                  ...
+                }},
+                {{
+                  "dimension":"Reputational",
+                  ...
+                }}
+              ],
+              "aggregate_score": {{
+                "method":"weighted_average",
+                "score":0-100,
+                "level":"LOW|MODERATE|HIGH|CRITICAL",
+                "weights":{{"Regulatory Enforcement":0.3,"Civil Liability":0.2,"Contractual Breach":0.2,"Operational Continuity":0.15,"Reputational":0.15}}
+              }},
+              "top_risks":[{"title":"...","description":"...","jurisdictions":["..."],"eta_days":7}],
+              "mitigations":[
+                {"title":"Adopt SCCs and conduct TIA","owner":"Legal","eta_days":14},
+                {"title":"Update DPA with processors","owner":"Procurement","eta_days":10},
+                {"title":"Implement data residency for health data","owner":"Infra","eta_days":30}
+              ]
+            }}
+
+            Constraints:
+            - Quantify likelihood and impact.
+            - Use conservative assumptions if facts are incomplete.
+            - DO NOT include prose outside the JSON. Return ONLY JSON.
+            """
+
+            risk_result = await self.run_agent_task(
+                thread_2,
+                risk_prompt,
+                "Real-Time Risk Modeling"
+            )
+            workflow_results["steps"]["risk_modeling"] = risk_result
+
+            # STEP 3: Conflict-of-Laws Resolution & Safe Path Design
+            print(f"\n🧭 STEP 3: Conflict-of-Laws Resolution & Safe Path Design")
+            thread_3 = await self.create_thread()
+
+            resolution_prompt = f"""
+            You are a Conflict-of-Laws Resolution Agent.
+
+            TASK: Determine controlling law hierarchy, identify extraterritorial reach,
+            and propose a safe path to operate across jurisdictions with conditions.
+
+            ORIGINAL CASE FACTS:
+            {json.dumps(input_data, indent=2)}
+
+            JURISDICTION MAPPING:
+            {analysis_result}
+
+            RISK MODELING:
+            {risk_result}
+
+            Return ONLY structured JSON:
+            {{
+              "controlling_law_analysis": [
+                {{"topic":"data transfers","controlling_law":"GDPR","basis":"Art.3, Art.44-49","notes":"..."}},
+                {{"topic":"consumer privacy","controlling_law":"CPRA","basis":"1798.120","notes":"..."}}
+              ],
+              "extraterritorial_reach":[
+                {{"framework":"GDPR","articles":["Art.3"],"applies_to":"non-EU entity processing EU data"}}
+              ],
+              "conflict_resolution":{"method":"most_protective","rationale":"..."},
+              "safe_path_recommendations":[
+                {"action":"Use SCCs + TIA + encryption at rest/in transit","precondition":"vendor supports EU data centers"},
+                {"action":"Implement data localization for health/sensitive data","precondition":"infra available in EU/IN"},
+                {"action":"Update DPA and records of processing","precondition":"records tooling ready"}
+              ],
+              "timeline":[
+                {"milestone":"DPA updates","owner":"Legal","eta_days":10},
+                {"milestone":"SCCs execution","owner":"Legal/Procurement","eta_days":14},
+                {"milestone":"Data residency setup","owner":"Infra","eta_days":30}
+              ],
+              "residual_risk_level":"LOW|MODERATE|HIGH|CRITICAL",
+              "notes":["..."]
+            }}
+
+            Constraints:
+            - Prefer the most protective/stricter framework where conflicts exist.
+            - Be explicit on preconditions and feasibility.
+            - DO NOT include prose outside the JSON. Return ONLY JSON.
+            """
+
+            resolution_result = await self.run_agent_task(
+                thread_3,
+                resolution_prompt,
+                "Conflict-of-Laws Resolution & Safe Path Design"
+            )
+            workflow_results["steps"]["conflict_resolution"] = resolution_result
+
+            # STEP 4: Executive Decision
+            print(f"\n🎯 STEP 4: Executive Decision")
+            thread_4 = await self.create_thread()
+
+            decision_prompt = f"""
+            You are an Executive Decision Agent.
+
+            TASK: Make a final decision based on all previous steps. The decision should be:
+            - APPROVED
+            - REJECTED
+            - CONDITIONAL (with explicit conditions)
+
+            ORIGINAL CASE FACTS:
+            {json.dumps(input_data, indent=2)}
+
+            JURISDICTION MAPPING:
+            {analysis_result}
+
+            RISK MODELING:
+            {risk_result}
+
+            CONFLICT RESOLUTION:
+            {resolution_result}
+
+            Return ONLY structured JSON:
+            {{
+              "decision":"APPROVED|REJECTED|CONDITIONAL",
+              "rationale":"...",
+              "conditions":[
+                {"condition":"Execute SCCs and complete TIA","owner":"Legal","due_in_days":14},
+                {"condition":"Enable EU residency for sensitive data","owner":"Infra","due_in_days":30}
+              ],
+              "next_steps":[
+                {"step":"Kick-off DPA updates","owner":"Legal","start_in_days":1},
+                {"step":"Procurement to validate vendor SCCs","owner":"Procurement","start_in_days":2}
+              ],
+              "communication_plan":[
+                {"audience":"Data Protection Officer","message":"Summary + mitigation timeline","channel":"Email"}
+              ]
+            }}
+
+            Constraints:
+            - Align decision to aggregate risk level and feasibility of safe path.
+            - DO NOT include prose outside the JSON. Return ONLY JSON.
+            """
+
+            decision_result = await self.run_agent_task(
+                thread_4,
+                decision_prompt,
+                "Executive Decision"
+            )
+            workflow_results["steps"]["final_decision"] = decision_result
+
+            workflow_results["status"] = "completed"
+
+            print(f"\n✅ WORKFLOW COMPLETED SUCCESSFULLY!")
+            print(f"{'='*80}")
+
+            return workflow_results
+
+        except Exception as e:
+            print(f"❌ Workflow failed: {str(e)}")
+            workflow_results["status"] = "failed"
+            workflow_results["error"] = str(e)
+            return workflow_results
+
+    def display_results(self, results: Dict[str, Any]):
+        """Display workflow results in a readable format"""
+        print(f"\n{'='*80}")
+        print(f"📋 WORKFLOW RESULTS")
+        print(f"{'='*80}")
+
+        print(f"Status: {results['status'].upper()}")
+
+        if results['status'] == 'completed':
+            print(f"\n📚 Jurisdiction Mapping:")
+            print(f"{results['steps']['jurisdiction_mapping']}")
+
+            print(f"\n⚖️  Risk Modeling:")
+            print(f"{results['steps']['risk_modeling']}")
+
+            print(f"\n🧭 Conflict Resolution:")
+            print(f"{results['steps']['conflict_resolution']}")
+
+            print(f"\n🎯 Final Decision:")
+            print(f"{results['steps']['final_decision']}")
+
+        elif results['status'] == 'failed':
+            print(f"\n❌ Error: {results.get('error', 'Unknown error')}")
+
+        print(f"{'='*80}")
+
+
+# Example usage
+async def main():
+    """Demonstrate cross-jurisdictional legal real-time risk workflow"""
+    workflow = MultiAgentWorkflow()
+
+    # Example input data: cross-border data transfer and multi-region operations
+    sample_data = {
+        "case_id": "DTX-2025-0017",
+        "operation": "Cross-border processing of EU and US consumer data with India-based processors",
+        "entities": [
+            {"name": "Acme Retail Ltd", "role": "controller", "country": "UK"},
+            {"name": "EuroShop GmbH", "role": "controller", "country": "DE"},
+            {"name": "DataCloud Services Pvt Ltd", "role": "processor", "country": "IN"},
+            {"name": "AdTech Co", "role": "vendor", "country": "US-CA"}
+        ],
+        "data_categories": ["PII", "Sensitive", "Behavioral", "Children"],
+        "systems": ["CDP", "Analytics", "AdTech", "CRM"],
+        "transfer_paths": [
+            {"from": "EU-DE", "to": "IN", "mechanism": "TBD", "volume_daily_records": 500000},
+            {"from": "EU-FR", "to": "US-CA", "mechanism": "TBD", "volume_daily_records": 250000}
+        ],
+        "existing_controls": ["DPA", "encryption_at_rest", "dpiA_draft"],
+        "missing_controls": ["SCCs_signed", "TIA_completed", "EU_residency_for_sensitive"],
+        "business_urgency": "HIGH",
+        "time_constraints_days": 30,
+        "risk_model_config": {
+            "weights": {
+                "Regulatory Enforcement": 0.30,
+                "Civil Liability": 0.20,
+                "Contractual Breach": 0.20,
+                "Operational Continuity": 0.15,
+                "Reputational": 0.15
+            },
+            "conservative_mode": True
+        }
+    }
+
+    # Execute the workflow
+    results = await workflow.execute_workflow(sample_data)
+
+    # Display results
+    workflow.display_results(results)
+
+if __name__ == "__main__":
+    asyncio.run(main())
