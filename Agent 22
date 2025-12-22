@@ -269,3 +269,22 @@ If you want next, I can:
 * Prepare **judge questions + answers**
 
 Just tell me 👍
+
+
+@app.post("/analyze")
+async def analyze_case(request: Request):
+    try:
+        data = await request.json()
+        print("📥 Received input:", data)
+
+        result = await workflow.run(data)
+        print("📤 Sending result:", result)
+
+        return JSONResponse(content=result)
+
+    except Exception as e:
+        print("❌ ERROR:", str(e))
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
