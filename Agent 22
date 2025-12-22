@@ -1,0 +1,271 @@
+Perfect 👍
+We’ll build a **simple, clean web UI + backend** that:
+
+✅ Takes case input
+✅ Calls your **existing agentic workflow (same backend logic)**
+✅ Shows **analysis + risk + decision**
+✅ Is **hackathon-friendly, beginner-readable, judge-impressive**
+
+No React. No heavy frontend.
+Just **FastAPI + HTML + fetch**.
+
+---
+
+# 🏗️ What we’ll build (simple but solid)
+
+```
+Browser (HTML form)
+        ↓
+FastAPI backend
+        ↓
+Your existing Agentic Workflow
+        ↓
+JSON result
+        ↓
+Displayed on dashboard
+```
+
+---
+
+# 📁 Final Project Structure
+
+```
+project/
+│
+├── backend.py          ← FastAPI backend (uses your agent workflow)
+├── workflow.py         ← Your existing agentic workflow (same as now)
+├── config.py
+├── utils.py            ← extract_json()
+│
+├── templates/
+│   └── index.html      ← UI
+│
+├── requirements.txt
+└── .env
+```
+
+---
+
+# 📦 requirements.txt (UPDATED)
+
+```
+fastapi
+uvicorn
+azure-identity
+azure-ai-agents
+python-dotenv
+```
+
+Install:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+---
+
+# 🔧 utils.py (JSON cleaner – reuse from earlier)
+
+```python
+import json
+import re
+
+def extract_json(text):
+    try:
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            return json.loads(match.group())
+    except:
+        pass
+    return {"error": "Invalid JSON", "raw": text}
+```
+
+---
+
+# 🧠 backend.py (FASTAPI + AGENTIC BACKEND)
+
+👉 This **uses your same workflow logic**
+
+```python
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+import asyncio
+
+from workflow import LegalRiskWorkflow
+from config import *
+from azure.identity import ClientSecretCredential
+from azure.ai.agents import AgentsClient
+
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+
+# Initialize Azure client once
+credential = ClientSecretCredential(
+    TENANT_ID,
+    CLIENT_ID,
+    CLIENT_SECRET
+)
+
+client = AgentsClient(
+    endpoint=PROJECT_ENDPOINT,
+    credential=credential
+)
+
+workflow = LegalRiskWorkflow(client, AGENT_ID)
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.post("/analyze")
+async def analyze_case(request: Request):
+    data = await request.json()
+
+    result = await workflow.run(data)
+
+    return JSONResponse(content=result)
+```
+
+---
+
+# 🎨 templates/index.html (SIMPLE UI DASHBOARD)
+
+👉 Clean, readable, judge-friendly
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Agentic Legal Risk Analyzer</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #f5f7fa;
+            padding: 40px;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            max-width: 700px;
+            margin: auto;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        textarea, button {
+            width: 100%;
+            margin-top: 10px;
+            padding: 10px;
+        }
+        pre {
+            background: #111;
+            color: #0f0;
+            padding: 15px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+    <h2>⚖️ Agentic Legal Risk Analyzer</h2>
+
+    <p>Enter case input (JSON):</p>
+
+    <textarea id="input" rows="10">
+{
+  "operation": "EU customer data processed by Indian vendor",
+  "countries": ["Germany", "India"],
+  "data": ["PII", "Sensitive"],
+  "urgency": "HIGH"
+}
+    </textarea>
+
+    <button onclick="analyze()">Analyze Risk</button>
+
+    <h3>Result</h3>
+    <pre id="output"></pre>
+</div>
+
+<script>
+async function analyze() {
+    const input = document.getElementById("input").value;
+
+    const response = await fetch("/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: input
+    });
+
+    const data = await response.json();
+    document.getElementById("output").textContent =
+        JSON.stringify(data, null, 2);
+}
+</script>
+
+</body>
+</html>
+```
+
+---
+
+# ▶️ How to RUN the app
+
+```bash
+uvicorn backend:app --reload
+```
+
+Open browser:
+
+```
+http://127.0.0.1:8000
+```
+
+---
+
+# 🏆 Why judges will like this
+
+✅ Clean separation: UI → Backend → Agents
+✅ Real-time analysis
+✅ Agentic reasoning (step-wise)
+✅ Machine-readable JSON
+✅ Practical legal use case
+
+You can say:
+
+> “The UI allows users to submit a real-world scenario, while the backend runs an agentic AI pipeline that reasons step-by-step before producing an executive decision.”
+
+🔥 That’s enough to impress.
+
+---
+
+# 🎤 What to DEMO (important)
+
+1. Paste input JSON
+2. Click **Analyze Risk**
+3. Show:
+
+   * Analysis
+   * Risk
+   * Final Decision
+4. Explain agentic flow (3 agents)
+
+---
+
+# 🚀 Optional polish (ONLY if time)
+
+* Color-code risk levels
+* Show decision badge (APPROVED / CONDITIONAL)
+* Add loading spinner
+
+---
+
+If you want next, I can:
+
+* Simplify UI more
+* Add confidence score bar
+* Add downloadable report (PDF/JSON)
+* Prepare **judge questions + answers**
+
+Just tell me 👍
