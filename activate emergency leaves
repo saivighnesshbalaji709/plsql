@@ -1,0 +1,493 @@
+create or replace Package hr_absence_restricted AUTHID CURRENT_USER as
+/* $Header: peabrest.pkh 120.1 2010/05/27 18:00:07 sidsaxen noship $ */
+--
+-- ----------------------------------------------------------------------------
+-- |----------------------< absences_restricted >--------------------------|
+-- ----------------------------------------------------------------------------
+--
+function absences_restricted
+   (selected_person_id in varchar2,
+   login_person_id in varchar2)
+return varchar2;
+
+--
+end;
+
+create or replace PACKAGE BODY      hr_absence_restricted as
+/* $Header: peabrest.pkb 120.1 2010/05/27 17:59:04 sidsaxen noship $ */
+-- ----------------------------------------------------------------------------
+-- |----------------------< absences_restricted >--------------------------|
+-- ----------------------------------------------------------------------------
+--
+
+function absences_restricted(selected_person_id in varchar2,
+		 login_person_id in varchar2
+		 )return varchar2 is
+v_payroll varchar2(100) :=null;  -----Added For SR 313190
+v_abs_uae varchar2(800) :=null;	-----Added For SR 313190
+v_abs_oth varchar2(800) :=null;	-----Added For SR 313190
+v_abs_ksa varchar2(800) :=null;	-----Added For SR 354732
+v_abs_bah varchar2(800) :=null;	-----Added For SR 372250
+v_region varchar2(100) :=null;	-----Added For SR 354732
+v_abs_qtr varchar2(800) :=null;	-----Added For SR 393567
+v_abs_kwt varchar2(800) :=null;	-----Added For SR 407907
+
+-- HISTORY
+-- ===============================================================================================================================
+--  Version    Date                   Author                         Activity
+-- ===============================================================================================================================
+--1.1         29-Aug-2022    	 Rishan (Hexaware)              SR 313190 - Leave Automation - Outstations - 2022
+--1.2         10-Apr-2023    	 Rishan (Hexaware)              SR 348870 - Off In Lieu validation applied for a same date
+--1.3		  19-Jul-2023    	 Rishan (Hexaware)              SR 354732 - LEAVE AUTOMATION Saudi Arab
+--1.4		  01-Feb-2024    	 Rishan (Hexaware)              SR 372250 - LEAVE AUTOMATION BAH
+--1.5		  30-Apr-2024		 Vijayadurga (Hexaware)   		SR 382032 - Emergency Leave Validation for Cargo Payroll
+--1.6         13-Nov-2024        Hexaware Tech Ltd.             SR 397992 - Off in Lieu not applicable for Catering Payroll
+--1.7		  18-Nov-2024    	 Rishan (Hexaware)              SR 393567 - LEAVE AUTOMATION QTR
+--1.8		  10-Apr-2025    	 Rishan (Hexaware)              SR 407907 - LEAVE AUTOMATION KWT
+--1.9         31-Jul-2025		 Rishan (Hexaware)              SR 417292 - Emergency Leave Validation for Base and Executive Payroll
+-- ===============================================================================================================================
+
+
+begin
+ -------------Start For SR 313190--------------------
+Begin
+v_payroll :=null;
+v_region :=null; --Added for SR 354732
+
+/*---commented for SR 354732
+select ppf.payroll_name  into v_payroll
+from apps.per_all_assignments_f paaf , pay_payrolls_f ppf  where
+1=1
+and person_id = to_number(selected_person_id)
+and ASSIGNMENT_TYPE ='E'
+and PRIMARY_FLAG = 'Y'
+and  trunc(sysdate) between trunc(paaf.effective_start_date ) and trunc(paaf.effective_end_date)
+and paaf.payroll_id =ppf.payroll_id
+and trunc(sysdate) between trunc(ppf.effective_start_date ) and trunc(ppf.effective_end_date);
+exception when others then
+v_payroll:= null;
+End;
+*/
+
+---Added for SR 354732
+
+select ppf.payroll_name ,ppg.segment3   into v_payroll ,v_region
+from apps.per_all_assignments_f paaf , pay_payrolls_f ppf ,pay_people_groups ppg
+where
+1=1
+and person_id = to_number(selected_person_id)
+AND ppg.people_group_id(+) = paaf.people_group_id
+and ASSIGNMENT_TYPE ='E'
+and PRIMARY_FLAG = 'Y'
+and  trunc(sysdate) between trunc(paaf.effective_start_date ) and trunc(paaf.effective_end_date)
+and paaf.payroll_id =ppf.payroll_id
+and trunc(sysdate) between trunc(ppf.effective_start_date ) and trunc(ppf.effective_end_date);
+exception when others then
+v_payroll:= null;
+v_region := null;
+End;
+
+---End For for SR 354732
+
+if (upper(v_payroll) = nvl(upper('UAE Payroll'),'XX'))
+OR ((upper(v_payroll) = nvl(upper('Base Payroll'),'XX')) AND (upper(v_region) = nvl(upper('UAE'),'XX'))) ---Added for SR 354732
+then
+
+begin
+v_abs_uae:=null;
+SELECT  (listagg (
+                                       absence_attendance_type_id,
+                                       ','
+                                    )
+                                       WITHIN GROUP (ORDER BY
+                                                        absence_attendance_type_id))
+                                                         into v_abs_uae
+                             FROM   per_absence_attendance_types
+                            WHERE   name NOT IN
+                                          ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_UAE_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'));
+ Exception when others
+ then
+      v_abs_uae :=null;
+ End ;
+return  v_abs_uae;---'15061,15062';
+
+---Added for 354732------
+elsif  (upper(v_payroll) = nvl(upper('KSA Payroll'),'XX'))
+OR ((upper(v_payroll) = nvl(upper('Base Payroll'),'XX')) AND (upper(v_region) = nvl(upper('KSA'),'XX')))
+then
+
+begin
+v_abs_ksa:=null;
+SELECT  (listagg (
+                                       absence_attendance_type_id,
+                                       ','
+                                    )
+                                       WITHIN GROUP (ORDER BY
+                                                        absence_attendance_type_id))
+                                                         into v_abs_ksa
+                             FROM   per_absence_attendance_types
+                            WHERE   name NOT IN
+                                          ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_KSA_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'));
+ Exception when others
+ then
+      v_abs_ksa :=null;
+ End ;
+return  v_abs_ksa;---'15061,15062';
+
+---End for 354732------
+
+
+---Added for 372250------
+elsif  (upper(v_payroll) = nvl(upper('Bahrain Payroll'),'XX'))
+OR ((upper(v_payroll) = nvl(upper('Base Payroll'),'XX')) AND (upper(v_region) = nvl(upper('BAHRAIN'),'XX')))
+then
+
+begin
+v_abs_bah:=null;
+SELECT  (listagg (
+                                       absence_attendance_type_id,
+                                       ','
+                                    )
+                                       WITHIN GROUP (ORDER BY
+                                                        absence_attendance_type_id))
+                                                         into v_abs_bah
+                             FROM   per_absence_attendance_types
+                            WHERE   name NOT IN
+                                          ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_BAH_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'));
+ Exception when others
+ then
+      v_abs_bah :=null;
+ End ;
+return  v_abs_bah;---'15061,15062';
+
+---End for 372250------
+
+---Added for 393567------
+elsif  (upper(v_payroll) = nvl(upper('Qatar Payroll'),'XX'))
+OR ((upper(v_payroll) = nvl(upper('Base Payroll'),'XX')) AND (upper(v_region) = nvl(upper('QATAR'),'XX')))
+then
+
+begin
+v_abs_qtr:=null;
+SELECT  (listagg (
+                                       absence_attendance_type_id,
+                                       ','
+                                    )
+                                       WITHIN GROUP (ORDER BY
+                                                        absence_attendance_type_id))
+                                                         into v_abs_qtr
+                             FROM   per_absence_attendance_types
+                            WHERE   name NOT IN
+                                          ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_QTR_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'));
+ Exception when others
+ then
+      v_abs_qtr :=null;
+ End ;
+return  v_abs_qtr;---'15061,15062';
+
+---End for 393567------
+
+---Added for 407907------
+elsif  (upper(v_payroll) = nvl(upper('Kuwait Payroll'),'XX'))
+OR ((upper(v_payroll) = nvl(upper('Base Payroll'),'XX')) AND (upper(v_region) = nvl(upper('KUWAIT'),'XX')))
+then
+
+begin
+v_abs_kwt:=null;
+SELECT  (listagg (
+                                       absence_attendance_type_id,
+                                       ','
+                                    )
+                                       WITHIN GROUP (ORDER BY
+                                                        absence_attendance_type_id))
+                                                         into v_abs_kwt
+                             FROM   per_absence_attendance_types
+                            WHERE   name NOT IN
+                                          ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_KWT_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'));
+ Exception when others
+ then
+      v_abs_kwt :=null;
+ End ;
+return  v_abs_kwt;---'15061,15062';
+
+---End for 407907------
+
+
+
+---added for SR 348870--
+elsif
+-----(upper(v_payroll) = nvl(upper('Base Payroll'),'XX')) OR ----removed Base payroll for SR 417292
+(upper(v_payroll) = nvl(upper('Catering Payroll'),'XX')) --Added as per SR#397992
+then
+
+begin
+v_abs_oth:=null;
+SELECT  (listagg (
+                                       absence_attendance_type_id,
+                                       ','
+                                    )
+                                       WITHIN GROUP (ORDER BY
+                                                        absence_attendance_type_id))
+                                                         into v_abs_oth
+                             FROM   per_absence_attendance_types
+                            WHERE   1=1
+                            AND (
+                            upper(name)  = upper('Off in Lieu')
+                            OR name  IN
+                                          (( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_UAE_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION  ----added union for SR 354732
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_KSA_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION  ----added union for SR 372250
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_BAH_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION  ----added union for SR 393567
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_QTR_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION  ----added union for SR 407907
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_KWT_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712')))
+                         );
+ Exception when others
+ then
+      v_abs_oth :=null;
+ End ;
+---v_abs_oth := ''''|| v_abs_oth||'''';
+return v_abs_oth;
+
+---END for 348870--
+----added for 417292----
+elsif (upper(v_payroll) = nvl(upper('Base Payroll'),'XX'))
+OR (upper(v_payroll) = nvl(upper('Executive Payroll'),'XX'))
+then
+
+begin
+v_abs_oth:=null;
+SELECT  (listagg (
+                                       absence_attendance_type_id,
+                                       ','
+                                    )
+                                       WITHIN GROUP (ORDER BY
+                                                        absence_attendance_type_id))
+                                                         into v_abs_oth
+                             FROM   per_absence_attendance_types
+                            WHERE   1=1
+                            AND (
+                            (name)  in ('Off in Lieu','Emergency Leave')
+                            OR name  IN
+                                          (( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_UAE_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION  ----added union for SR 354732
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_KSA_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION  ----added union for SR 372250
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_BAH_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION  ----added union for SR 393567
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_QTR_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION  ----added union for SR 407907
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_KWT_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712')))
+                         );
+ Exception when others
+ then
+      v_abs_oth :=null;
+ End ;
+---v_abs_oth := ''''|| v_abs_oth||'''';
+return v_abs_oth;
+
+----End for 417292----
+
+---added for SR 382032--
+elsif upper(v_payroll) = nvl(upper('Cargo Payroll'),'XX') then
+
+begin
+v_abs_oth:=null;
+SELECT  (listagg (
+                                       absence_attendance_type_id,
+                                       ','
+                                    )
+                                       WITHIN GROUP (ORDER BY
+                                                        absence_attendance_type_id))
+                                                         into v_abs_oth
+                             FROM   per_absence_attendance_types
+                            WHERE   1=1
+                            AND (
+                            upper(name)  = upper('Emergency Leave')
+                            OR name  IN
+                                          (( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_UAE_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION  ----added union for SR 354732
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_KSA_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION  ----added union for SR 372250
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_BAH_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION  ----added union for SR 393567
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_QTR_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION  ----added union for SR 407907
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_KWT_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712')))
+                         );
+ Exception when others
+ then
+      v_abs_oth :=null;
+ End ;
+---v_abs_oth := ''''|| v_abs_oth||'''';
+return v_abs_oth;
+
+---END for 382032--
+
+else
+
+begin
+v_abs_oth:=null;
+SELECT  (listagg (
+                                       absence_attendance_type_id,
+                                       ','
+                                    )
+                                       WITHIN GROUP (ORDER BY
+                                                        absence_attendance_type_id))
+                                                         into v_abs_oth
+                             FROM   per_absence_attendance_types
+                            WHERE   name  IN
+                                          (( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_UAE_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION ----added union for SR 354732
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_KSA_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION ----added union for SR 372250
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_BAH_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION ----added union for SR 393567
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_QTR_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 UNION ----added union for SR 407907
+		 ( SELECT Meaning
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_KWT_LEAVE_TYPE'
+         AND flv.enabled_flag  ='Y'
+         AND trunc(sysdate) BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712'))
+		 );
+ Exception when others
+ then
+      v_abs_oth :=null;
+ End ;
+---v_abs_oth := ''''|| v_abs_oth||'''';
+return v_abs_oth;
+
+ End if;
+ -------------End For SR 313190--------------------
+end absences_restricted;
+
+--
+end hr_absence_restricted;
+
+to activate emergency leaves for
+
+Cargo employee’s effective 01.Jan.2026. 
