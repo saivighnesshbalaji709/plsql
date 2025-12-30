@@ -1,5 +1,289 @@
-IF p_payroll_id IS NOT NULL THEN
-   FOR rec IN CurPayroll(p_payroll_id) LOOP
+create or replace PROCEDURE      XXOA_HR_AGE_PRC (
+   errbuf            OUT VARCHAR2,
+   retcode           OUT VARCHAR2,
+   P_Department   IN     VARCHAR2,
+   P_person_id    IN     NUMBER,
+   p_start_date   IN     VARCHAR2,
+--   p_end_date     IN     VARCHAR2,
+   p_reviewer     IN     NUMBER,
+   p_age          IN     NUMBER,
+   p_payroll_id  IN    NUMBER)
+-- =========================================================================
+--      Copyright (c) 2011 Oman Air Project
+--                    All rights reserved.
+-- =========================================================================
+--  NAME
+-- XXOA_HR_AGE_PRC.prc
+--
+--  Design Reference
+--  No Previous reference
+--
+-- PROGRAM TYPE
+--  Procedure
+--
+-- PURPOSE
+--
+--  This Procedure should fetch employees who have attained age of 57 years within two given dates
+--
+-- NOTES
+-- This Procedure will generate the XML Tags for this Report "OA Custom HR Age(57) Report"
+--
+-- HISTORY
+-- =========================================================================
+--  Version        Date                Author                     Activity
+-- =========================================================================
+--   1.0         28-JUL-2011         Sarvani Anugu      Initial Version
+--   1.1         18-SEP-2018         M.Vignesh          Catering LE Changes
+--   1.2         15-APR-2025         Vijayadurga Nayudu SR#409277
+--   1.3         30-DEC-2025         Sai Vighnessh B L  SR#429410
+-- =========================================================================
+
+AS
+   /*Cursor is used to fetch the reviewer Name*/
+   CURSOR CurReviewer (
+      p_reviewer NUMBER)
+   IS
+        select FULL_NAME name
+                  ,POSITION position
+                  ,sysdate
+              from XXOA_HR_EMPUDTSIG_V
+             where row_id = p_reviewer;
+
+ CURSOR Curdeptname (
+     P_Department NUMBER,p_effective_start_date  DATE)
+   IS
+        select hr_general.decode_organization(P_Department) name
+              ,to_char(p_effective_start_date,'DD-MON-YYYY') ps_date
+              from dual;
+
+             CURSOR Curempname (
+    P_person_id NUMBER)
+   IS
+        select employee_number
+              from --PER_ALL_PEOPLE_F ppf --Commented for Catering LE Changes
+			       PER_PEOPLE_F ppf       --Added for Catering LE Changes
+              where  trunc(sysdate) BETWEEN PPF.EFFECTIVE_START_DATE
+                                       AND  PPF.EFFECTIVE_END_DATE
+             and  person_id=P_person_id;
+			 
+	CURSOR CurPayroll (
+    p_payroll_id NUMBER)
+   IS
+        select payroll_name from apps.pay_payrolls_f where payroll_id = :p_payroll_id
+             and rownum = 1;
+
+
+   /*Cursor is used to fetch the employees who have attained age of 57 years within two given dates*/
+   CURSOR CurEmpDet (
+      p_department                           VARCHAR2,
+      p_employee_number                      NUMBER,
+      p_effective_start_date                 DATE)
+   IS
+        SELECT PPF.EMPLOYEE_NUMBER,
+               ppf.person_id,
+               initcap(PPF.FULL_NAME) FULL_NAME, ------Added initcap function for the SR#409277
+               TO_CHAR (PPF.START_DATE, 'DD-MON-YYYY') DOJ,
+               PPS.NAME  POSITION,
+               PG.NAME GRADE,
+               xxoa_hr.GET_PARENT_ORG(fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paf.organization_id,'DEPT','NAME') dept,
+               xxoa_hr.GET_PARENT_ORG(fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paf.organization_id,'SE','NAME') section,
+               to_char(p_effective_start_date,'DD-MON-YYYY') ps_date,
+--               to_char(p_effective_end_date,'DD-MON-YYYY') pe_date,
+               TO_CHAR (PPF.DATE_OF_BIRTH, 'DD-MON-YYYY') DOB,
+               CASE
+                  WHEN PPF.DATE_OF_BIRTH IS NOT NULL
+                  THEN
+                     TRUNC (MONTHS_BETWEEN (p_effective_start_date, PPF.DATE_OF_BIRTH) / 12)
+                     || ' Years'
+                     || ' '
+                     || TRUNC(MOD (MONTHS_BETWEEN (p_effective_start_date, PPF.DATE_OF_BIRTH),
+                                   12))
+                     || ' Months'
+                     || ' '
+                     || TRUNC(p_effective_start_date
+                              - ADD_MONTHS (
+                                   PPF.DATE_OF_BIRTH,
+                                   TRUNC(MONTHS_BETWEEN (p_effective_start_date,
+                                                         PPF.DATE_OF_BIRTH))))
+                     || ' Days'
+                  ELSE
+                     NULL
+               END
+                  AGE,
+               HL.MEANING NATIONALITY,
+               (SELECT initcap(PP.FULL_NAME) --- Added for the SR#409277
+                  FROM --PER_ALL_PEOPLE_F PP --Commented for Catering LE Changes
+				       PER_PEOPLE_F PP       --Added for Catering LE Changes
+                 WHERE PP.PERSON_ID = PAF.SUPERVISOR_ID
+                       AND SYSDATE BETWEEN PP.EFFECTIVE_sTART_DATE
+                                       AND  PP.EFFECTIVE_END_DATE)
+                  SUP_NAME,
+               PAST.USER_STATUS EMPLOYMENT_STATUS,
+               TO_CHAR (add_months(PPF.DATE_OF_BIRTH,720), 'DD-MON-YYYY') retirment_date -- Added By Sameer Patil
+          FROM --PER_ALL_PEOPLE_F PPF, 			--Commented for Catering LE Changes
+               --PER_ALL_ASSIGNMENTS_F PAF, 	--Commented for Catering LE Changes
+		       PER_PEOPLE_F PPF, 				--Added for Catering LE Changes
+               PER_ASSIGNMENTS_F PAF, 			--Added for Catering LE Changes
+               PER_GRADES PG,
+               PER_ALL_POSITIONS PPS,
+               PER_JOBS PJ,
+               HR_LOOKUPS HL,
+               per_periods_of_service pos,
+               PER_ASSIGNMENT_STATUS_TYPES PAST
+         WHERE     PPF.PERSON_ID = PAF.PERSON_ID
+               AND PAF.GRADE_ID = PG.GRADE_ID(+)
+               AND PAF.POSITION_ID = PPS.POSITION_ID(+)
+               AND PAF.JOB_ID = PJ.JOB_ID(+)
+               AND PAST.ASSIGNMENT_STATUS_TYPE_ID(+) = PAF.ASSIGNMENT_STATUS_TYPE_ID
+               AND HL.LOOKUP_TYPE(+) = ('NATIONALITY') /*Lookup type is used to get the Nationality*/
+               AND HL.LOOKUP_CODE(+) = PPF.NATIONALITY
+               AND paf.person_id = pos.person_id
+               AND TRUNC (paf.effective_start_date) BETWEEN pos.date_start AND NVL (pos.actual_termination_date, paf.effective_start_date)
+               AND paf.effective_start_date BETWEEN PPF.EFFECTIVE_START_DATE AND PPF.EFFECTIVE_END_DATE
+               AND PPF.person_id = NVL (p_employee_number, PPF.person_id)
+               --AND nvl(paf.organization_id,'~') = NVL(NVL (p_department, paf.ORGANIZATION_ID),'~')
+--               AND (p_department IS NULL
+--                    OR
+--                    xxoa_hr.GET_PARENT_ORG(fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paf.organization_id,'DEPT','ID') = p_department
+--                    OR
+--                    --xxoa_hr.GET_PARENT_ORG(fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paf.organization_id,'SE','ID') = p_department
+--                    paf.organization_id = p_department
+--                   )
+               AND p_effective_start_date between paf.effective_start_date and paf.effective_end_date
+               --AND ppf.date_of_birth <= p_effective_start_date
+               AND PPF.current_employee_flag = 'Y'
+               AND TRUNC (MONTHS_BETWEEN (p_effective_start_date, date_of_birth) / 12) >= p_age /*57 is used to get the employees who have attained the age of 57 years*/
+               AND paf.primary_flag = 'Y'
+               AND (p_department IS NULL
+                    OR
+                    xxoa_hr.GET_PARENT_ORG(fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paf.organization_id,'DEPT','ID') = p_department
+                    OR
+                    --xxoa_hr.GET_PARENT_ORG(fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paf.organization_id,'SE','ID') = p_department
+                    paf.organization_id = p_department
+                   )
+      ORDER BY dept,section,LPAD (ppf.employee_number, 10);
+
+
+
+   vDept                 hr_all_organization_units.name%TYPE;
+   vSection              hr_all_organization_units.name%TYPE;
+   vReviewer             per_all_people_f.FULL_NAME%TYPE;
+   vTitle                per_all_positions.NAME%TYPE;
+   vDate                 VARCHAR2(100);
+   l_business_group_id   NUMBER;
+   vdeptname hr_all_organization_units.name%TYPE;
+   vempname  per_all_people_f.FULL_NAME%TYPE;
+   vps_date             varchar2(100);
+   v_payroll_name       pay_payrolls_f.payroll_name%TYPE;
+   
+BEGIN
+   /*Start of Reviewer Cursor
+   IF reviewer parameter is given then this Variables fetch the data,else null*/
+
+
+   IF p_reviewer IS NOT NULL
+   THEN
+      FOR CurEmpDet_R IN CurReviewer (p_reviewer)
+      LOOP
+         vReviewer := CurEmpDet_R.name;
+         vTitle := CurEmpDet_R.position;
+         vDate := to_char(SYSDATE,'DD-Mon-RRRR');
+      END LOOP;
+   ELSE
+      vReviewer := NULL;
+      vTitle := NULL;
+      vDate := to_char(SYSDATE,'DD-Mon-RRRR');
+   END IF;
+   
+   IF p_payroll_id IS NOT NULL 
+   THEN
+   FOR rec IN CurPayroll(p_payroll_id) 
+   LOOP
       v_payroll_name := rec.payroll_name;
    END LOOP;
-END IF;
+    END IF;
+
+     FOR Curdeptname_R IN Curdeptname (p_department
+                                       ,TRUNC (TO_DATE (p_start_date, 'RRRR/MM/DD HH24:MI:SS')))
+      LOOP
+
+         vdeptname := Curdeptname_R.name;
+
+         vps_date := Curdeptname_R.ps_date;
+
+      END LOOP;
+
+       FOR Curempname_R IN Curempname (P_person_id)
+      LOOP
+         vempname := Curempname_R.employee_number ;
+      END LOOP;
+
+
+
+   /*Start of XML Tags*/
+
+   FND_FILE.PUT_LINE (FND_FILE.OUTPUT, '<?xml version="1.0"?>');
+   FND_FILE.PUT_LINE (FND_FILE.OUTPUT, '<XXOAHRAGE>');
+
+    FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<DEPT_NAME><![CDATA[' ||vdeptname || ']]></DEPT_NAME>');
+    FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<EMP_NAME><![CDATA[' ||vempname || ']]></EMP_NAME>');
+    fnd_file.put_line (fnd_file.output,'<PS_DATE>' || vps_date || '</PS_DATE>');
+    fnd_file.put_line (fnd_file.output,'<P_AGE>' || p_age || '</P_AGE>');
+	fnd_file.put_line (fnd_file.output,'<PAYROLL_NAME>' || v_payroll_name || '</PAYROLL_NAME>');
+
+   /*Main Cusrsor starts*/
+
+   FOR CurEmpDet_rec
+      IN CurEmpDet (P_Department,
+                    P_person_id,
+                    TRUNC (TO_DATE (p_start_date, 'RRRR/MM/DD HH24:MI:SS')))
+   LOOP
+
+      /*Start of Main Cursor XML Tags*/
+
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT, '<G_EMP>');
+
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<DEPARTMENT><![CDATA[' || CurEmpDet_rec.Dept || ']]></DEPARTMENT>');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<SECTION><![CDATA[' || CurEmpDet_rec.Section || ']]></SECTION>');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<EMP_NUMBER>' || CurEmpDet_rec.employee_number || '</EMP_NUMBER>');
+--      fnd_file.put_line (fnd_file.output,'<PE_DATE>' || CurEmpDet_Rec.pe_date || '</PE_DATE>');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<EMP_NAME><![CDATA[' || CurEmpDet_rec.full_name || ']]></EMP_NAME>');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<ASG_STATUS><![CDATA[' || CurEmpDet_rec.EMPLOYMENT_STATUS || ']]></ASG_STATUS>');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<HIRE_DATE>' || CurEmpDet_rec.DOJ || '</HIRE_DATE>');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<NATIONALITY><![CDATA[' || CurEmpDet_rec.Nationality || ']]></NATIONALITY>');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<POSITION><![CDATA[' || CurEmpDet_rec.position || ']]></POSITION>');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<GRADE><![CDATA[' || CurEmpDet_rec.grade || ']]></GRADE>');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<DOB>' || CurEmpDet_rec.DOB || '</DOB>');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<RETIREMENT_DATE>' || CurEmpDet_rec.retirment_date || '</RETIREMENT_DATE>');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<AGE>' || CurEmpDet_rec.Age || '</AGE>');
+      FND_FILE.PUT_LINE ( FND_FILE.OUTPUT,'<SUPNAME><![CDATA[' || CurEmpDet_rec.SUP_NAME || ']]></SUPNAME>');
+      FND_FILE.PUT_LINE (FND_FILE.OUTPUT, '</G_EMP>');
+   /*End of Main Cursor XML Tags*/
+
+   END LOOP;
+
+   /*End of CurEmpDet_rec*/
+
+   /*Start of Reviewer XML Tags*/
+
+   FND_FILE.PUT_LINE (FND_FILE.OUTPUT, '<G_REVIEWER>');
+   FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<EMP_NAME_R><![CDATA[' || vReviewer || ']]></EMP_NAME_R>');
+   FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<POSITION_R><![CDATA[' || vTitle || ']]></POSITION_R>');
+   FND_FILE.PUT_LINE (FND_FILE.OUTPUT,'<SYSDATE_R>' || vDate || '</SYSDATE_R>');
+   FND_FILE.PUT_LINE (FND_FILE.OUTPUT, '</G_REVIEWER>');
+
+   FND_FILE.PUT_LINE (FND_FILE.OUTPUT, '</XXOAHRAGE>');
+/*END of Reviewer XML Tags*/
+
+/*Exception for the Main*/
+EXCEPTION
+    WHEN NO_DATA_FOUND
+           THEN
+              FND_FILE.PUT_LINE (FND_FILE.LOG, 'No Data Found : ' || SQLERRM);
+   WHEN TOO_MANY_ROWS
+           THEN
+              FND_FILE.PUT_LINE (FND_FILE.LOG, 'Too Many Rows occured : ' || SQLERRM);
+   WHEN OTHERS
+   THEN
+      FND_FILE.PUT_LINE (FND_FILE.LOG, 'Error in Main Block : ' || SQLERRM);
+END;
