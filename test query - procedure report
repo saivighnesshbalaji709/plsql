@@ -1,0 +1,84 @@
+SELECT PPF.EMPLOYEE_NUMBER,
+               ppf.person_id,
+               initcap(PPF.FULL_NAME) FULL_NAME, ------Added initcap function for the SR#409277
+               TO_CHAR (PPF.START_DATE, 'DD-MON-YYYY') DOJ,
+               PPS.NAME  POSITION,
+               PG.NAME GRADE,
+               xxoa_hr.GET_PARENT_ORG(fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paf.organization_id,'DEPT','NAME') dept,
+               xxoa_hr.GET_PARENT_ORG(fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paf.organization_id,'SE','NAME') section,
+               to_char(p_effective_start_date,'DD-MON-YYYY') ps_date,
+--               to_char(p_effective_end_date,'DD-MON-YYYY') pe_date,
+               TO_CHAR (PPF.DATE_OF_BIRTH, 'DD-MON-YYYY') DOB,
+               CASE
+                  WHEN PPF.DATE_OF_BIRTH IS NOT NULL
+                  THEN
+                     TRUNC (MONTHS_BETWEEN (p_effective_start_date, PPF.DATE_OF_BIRTH) / 12)
+                     || ' Years'
+                     || ' '
+                     || TRUNC(MOD (MONTHS_BETWEEN (p_effective_start_date, PPF.DATE_OF_BIRTH),
+                                   12))
+                     || ' Months'
+                     || ' '
+                     || TRUNC(p_effective_start_date
+                              - ADD_MONTHS (
+                                   PPF.DATE_OF_BIRTH,
+                                   TRUNC(MONTHS_BETWEEN (p_effective_start_date,
+                                                         PPF.DATE_OF_BIRTH))))
+                     || ' Days'
+                  ELSE
+                     NULL
+               END
+                  AGE,
+               HL.MEANING NATIONALITY,
+               (SELECT initcap(PP.FULL_NAME) --- Added for the SR#409277
+                  FROM --PER_ALL_PEOPLE_F PP --Commented for Catering LE Changes
+				       PER_PEOPLE_F PP       --Added for Catering LE Changes
+                 WHERE PP.PERSON_ID = PAF.SUPERVISOR_ID
+                       AND SYSDATE BETWEEN PP.EFFECTIVE_sTART_DATE
+                                       AND  PP.EFFECTIVE_END_DATE)
+                  SUP_NAME,
+               PAST.USER_STATUS EMPLOYMENT_STATUS,
+               TO_CHAR (add_months(PPF.DATE_OF_BIRTH,720), 'DD-MON-YYYY') retirment_date -- Added By Sameer Patil
+          FROM --PER_ALL_PEOPLE_F PPF, 			--Commented for Catering LE Changes
+               --PER_ALL_ASSIGNMENTS_F PAF, 	--Commented for Catering LE Changes
+		       PER_PEOPLE_F PPF, 				--Added for Catering LE Changes
+               PER_ASSIGNMENTS_F PAF, 			--Added for Catering LE Changes
+               PER_GRADES PG,
+               PER_ALL_POSITIONS PPS,
+               PER_JOBS PJ,
+               HR_LOOKUPS HL,
+               per_periods_of_service pos,
+               PER_ASSIGNMENT_STATUS_TYPES PAST
+         WHERE     PPF.PERSON_ID = PAF.PERSON_ID
+               AND PAF.GRADE_ID = PG.GRADE_ID(+)
+               AND PAF.POSITION_ID = PPS.POSITION_ID(+)
+               AND PAF.JOB_ID = PJ.JOB_ID(+)
+               AND PAST.ASSIGNMENT_STATUS_TYPE_ID(+) = PAF.ASSIGNMENT_STATUS_TYPE_ID
+               AND HL.LOOKUP_TYPE(+) = ('NATIONALITY') /*Lookup type is used to get the Nationality*/
+               AND HL.LOOKUP_CODE(+) = PPF.NATIONALITY
+               AND paf.person_id = pos.person_id
+               AND TRUNC (paf.effective_start_date) BETWEEN pos.date_start AND NVL (pos.actual_termination_date, paf.effective_start_date)
+               AND paf.effective_start_date BETWEEN PPF.EFFECTIVE_START_DATE AND PPF.EFFECTIVE_END_DATE
+               AND PPF.person_id = NVL (p_employee_number, PPF.person_id)
+			   AND paf.payroll_id = p_payroll_id
+               --AND nvl(paf.organization_id,'~') = NVL(NVL (p_department, paf.ORGANIZATION_ID),'~')
+--               AND (p_department IS NULL
+--                    OR
+--                    xxoa_hr.GET_PARENT_ORG(fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paf.organization_id,'DEPT','ID') = p_department
+--                    OR
+--                    --xxoa_hr.GET_PARENT_ORG(fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paf.organization_id,'SE','ID') = p_department
+--                    paf.organization_id = p_department
+--                   )
+               AND p_effective_start_date between paf.effective_start_date and paf.effective_end_date
+               --AND ppf.date_of_birth <= p_effective_start_date
+               AND PPF.current_employee_flag = 'Y'
+               AND TRUNC (MONTHS_BETWEEN (p_effective_start_date, date_of_birth) / 12) >= p_age /*57 is used to get the employees who have attained the age of 57 years*/
+               AND paf.primary_flag = 'Y'
+               AND (p_department IS NULL
+                    OR
+                    xxoa_hr.GET_PARENT_ORG(fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paf.organization_id,'DEPT','ID') = p_department
+                    OR
+                    --xxoa_hr.GET_PARENT_ORG(fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paf.organization_id,'SE','ID') = p_department
+                    paf.organization_id = p_department
+                   )
+      ORDER BY dept,section,LPAD (ppf.employee_number, 10);
