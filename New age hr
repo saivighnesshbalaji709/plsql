@@ -1,0 +1,5 @@
+IF p_payroll_id IS NOT NULL THEN
+   FOR rec IN CurPayroll(p_payroll_id) LOOP
+      v_payroll_name := rec.payroll_name;
+   END LOOP;
+END IF;
