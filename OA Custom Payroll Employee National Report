@@ -1,0 +1,404 @@
+'OA Custom Payroll Employee National Report'
+
+
+<!-- GSCC_Category="Xdo Data Definition" -->
+<dataTemplate name="XXOAHREMPNATION"  version="1.0">
+<properties>
+  <property name="xml_tag_case" value="UPPER"/>
+  <property name="debug_mode"   value="ON"/>
+</properties>
+<parameters>
+	<parameter name="P_PAYROLL_ID"		dataType = "NUMBER"></parameter>
+	<parameter name="P_SBU"  			dataType = "NUMBER"></parameter>
+	<parameter name="P_DEPT"  			dataType = "NUMBER"></parameter>	
+	--<parameter name="P_START_DATE"	dataType = "DATE"></parameter>
+	<parameter name="P_END_DATE"  		dataType = "DATE"></parameter>
+	<parameter name="P_CURRENCY_CODE"  	dataType = "VARCHAR"></parameter>
+	<parameter name="P_PERSON_ID"       dataType = "NUMBER"></parameter>
+---	<parameter name="P_REVIEWER"  		dataType = "NUMBER"></parameter>   --- Commented for SR# 365539
+	<parameter name="P_REVIEWER"  		dataType = "VARCHAR"></parameter>   --- Added for SR# 365539
+</parameters>
+
+<dataQuery>
+<sqlStatement name="Q_MAIN1">
+<![CDATA[
+	select FULL_NAME name
+ 		 ,POSITION position1
+	   from XXOA_HR_EMPUDTSIG_V
+	  where row_id=:P_REVIEWER			  
+]]>
+</sqlStatement>
+
+
+
+<sqlStatement name="Q_MAIN2">
+<![CDATA[
+	select replace(','||to_char(sysdate,'DD-MON-YYYY HH24:MM:SS'),',','"') sdate from dual
+]]>
+</sqlStatement>
+<sqlStatement name="Q_MAIN3">
+<![CDATA[
+	select sysdate sdate1 from dual
+]]>
+</sqlStatement>
+<sqlStatement name="Q_MAIN4">
+<![CDATA[
+	select --TO_CHAR(:P_START_DATE,'DD-MON-RRRR') PS_date,
+			 TO_CHAR(:P_END_DATE,'DD-MON-RRRR') PE_date,
+			 hr_general.decode_organization(:P_SBU) PM_SBU,
+			 hr_general.decode_organization(:P_DEPT) PM_DEPT,
+			 :P_CURRENCY_CODE PM_CURRENCY_CODE,
+			 (select PAYROLL_NAME  from apps.pay_payrolls_f where payroll_id=:P_PAYROLL_ID) PY_NAME,
+			(
+			  select employee_number
+				from per_people_f papf
+			  where 1 = 1
+				 and papf.person_id = :P_PERSON_ID
+				 and trunc(sysdate) between papf.effective_start_date and papf.effective_end_date
+			) PM_EMPNO,
+			(select security_profile_name from per_security_profiles where security_profile_id = fnd_profile.value('PER_SECURITY_PROFILE_ID')) SECURITY_PROFILE_NAME	--Added for SR260843			
+	  from dual
+]]>
+</sqlStatement>
+<sqlStatement name="Q_MAIN">
+<![CDATA[	
+SELECT   papf.employee_number emp_no, 
+  papf.national_identifier NATIONAL_ID,   -- Added for SR 180226
+  -- papf.full_name f_name,  -- Commentedfor the SR#408285
+  initcap(papf.full_name) f_name, -- Added for the SR#408285
+  papf.attribute30 arabic_name, --- Added For SR 269623
+         paaf.assignment_id, paaf.effective_start_date,
+         (SELECT decode(user_status,'Suspend Assignment','Suspend / Final Settlement',user_status)
+            FROM per_assignment_status_types
+           WHERE assignment_status_type_id =
+                                    paaf.assignment_status_type_id)
+                                                                   ass_status,
+         ---TO_CHAR (papf.start_date, 'DD-MON-YYYY') doj,  ----commented for SR 314270
+		    TO_CHAR((select  max(DATE_START) from per_periods_of_service  where person_id =paaf.person_id), 'DD-MON-YYYY') doj, ----added for SR 314270
+         hla.location_code office_loc,
+         hr_general.decode_lookup ('NATIONALITY',
+                                   papf.nationality
+                                  ) nationality,
+         xxoa_hr_subsection.get_parent_org
+                             (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                              paaf.organization_id,
+                              'SBU',
+                              'NAME'
+                             ) sbu,
+         xxoa_hr_subsection.get_parent_org
+                         (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                          paaf.organization_id,
+                          'SE',
+                          'NAME'
+                         ) section,
+	  ----(CASE WHEN (hou.ATTRIBUTE18 is not null  and Upper(hou.TYPE) = 'SE') THEN hou.NAME else null end ) Subsection,----- Added for SR 3000311 -- commented for the SR#408285
+	       xxoa_hr_subsection.get_parent_org
+                      (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                       paaf.organization_id,
+                       'SUBSEC',
+                       'NAME'
+                      ) Subsection, -- Added for the SR#408285
+						 xxoa_hr_subsection.get_parent_org
+                      (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                       paaf.organization_id,
+                       'DEPT',
+                       'NAME'
+                      ) department,
+        -- pap.NAME POSITION,  -- Commented  for the SR#408285
+		SUBSTR(pap.NAME, 0, INSTR(pap.NAME, '.')-1) POSITION, -- Added for the SR#408285
+		 pg.NAME grade, hl1.meaning region,
+         TO_CHAR
+            (xxoa_payroll_all.get_basic_salary (paaf.business_group_id,
+                                                paaf.assignment_id,
+                                                :p_end_date
+                                               ---paaf.effective_start_date --> changed by manish on 11apr13
+                                               )
+            ) basic,
+         TRIM
+            (TO_CHAR
+                ((  xxoa_payroll_all.get_basic_salary (paaf.business_group_id,
+                                                       paaf.assignment_id,
+                                                       :p_end_date
+                                                      )
+                  + xxoa_payroll_all.get_allowances (paaf.business_group_id,
+                                                     paaf.assignment_id,
+                                                     :p_end_date
+                                                    )
+                 ),
+                 xxoa_hr_get_curr_prec_fns
+                    ((SELECT pet.input_currency_code
+                        FROM per_pay_bases ppb,
+                             pay_input_values_f piv,
+                             pay_element_types_f pet
+                       WHERE ppb.input_value_id = piv.input_value_id(+)
+                         AND piv.element_type_id = pet.element_type_id(+)
+                         AND ppb.pay_basis_id = paaf.pay_basis_id
+                         AND paaf.effective_start_date
+                                BETWEEN piv.effective_start_date
+                                    AND piv.effective_end_date
+                         AND paaf.effective_start_date
+                                BETWEEN pet.effective_start_date
+                                    AND pet.effective_end_date)
+                    )
+                )
+            ) salary,
+			            ---added for 422718---
+        to_Char( xxoa_payroll_all.get_gross_salary_oman (paaf.business_group_id,
+                                                     paaf.assignment_id,
+                                                     :p_end_date
+                                                    ))gross_salary_oman,
+        to_char(xxoa_get_allowances_wage (paaf.business_group_id,    paaf.assignment_id,   :p_end_date)) Fixed_Allowance,
+              to_char(    (   
+            CASE 
+            WHEN nvl(pg.attribute6,'N') = 'Y'
+            THEN
+            xxoa_get_variable_allowances (paaf.business_group_id,    paaf.assignment_id,   :p_end_date)
+           ELSE
+           (xxoa_payroll_all.get_allowances (paaf.business_group_id,    paaf.assignment_id,   :p_end_date)
+           -  xxoa_get_allowances_wage (paaf.business_group_id,    paaf.assignment_id,   :p_end_date))
+        END     ))Var_Allowance,
+		to_char(xxoa_js_si_calc (paaf.business_group_id,    paaf.assignment_id,   :p_end_date,'Social Insurance Employee'))SI_EMP,
+		to_char(xxoa_js_si_calc (paaf.business_group_id,    paaf.assignment_id,   :p_end_date,'Social Insurance Employer'))SI_EMPR,
+		to_char(xxoa_js_si_calc (paaf.business_group_id,    paaf.assignment_id,   :p_end_date,'Job Security Employee'))JS_EMP,
+		to_char(xxoa_js_si_calc (paaf.business_group_id,    paaf.assignment_id,   :p_end_date,'Job Security Employer'))JS_EMPR,
+		to_char(xxoa_js_si_calc (paaf.business_group_id,    paaf.assignment_id,   :p_end_date,'Maternity Paternity Contrib Employer'))MP_EMPR,
+		 ---END for 422718---
+         (SELECT pet.input_currency_code
+            FROM per_pay_bases ppb,
+                 pay_input_values_f piv,
+                 pay_element_types_f pet
+           WHERE ppb.input_value_id = piv.input_value_id(+)
+             AND piv.element_type_id = pet.element_type_id(+)
+             AND ppb.pay_basis_id = paaf.pay_basis_id
+             AND paaf.effective_start_date BETWEEN piv.effective_start_date
+                                               AND piv.effective_end_date
+             AND paaf.effective_start_date BETWEEN pet.effective_start_date
+                                               AND pet.effective_end_date)
+                                                                    curr_code,
+		 (SELECT ppb.name
+  FROM per_pay_bases ppb
+  WHERE ppb.pay_basis_id = paaf.pay_basis_id
+  )SALARY_BASIS,    --- Added for SR 180226
+         papf.country_of_birth,
+         DECODE (papf.sex, 'M', 'Male', 'F', 'Female') gender,
+         TO_CHAR (date_of_birth, 'DD-MON-YYYY') date_of_birth,
+         xxoa_hr_emp_age_fns (:p_end_date, date_of_birth) age,
+   trunc(ROUND(months_between(sysdate,pos.date_start))/12) ||' Years '||mod( ROUND(months_between(sysdate,pos.date_start)),12)||' Months' EXPERIENCE  ----SR 300311 
+		  ,ROUND(months_between(sysdate,pos.date_start))||' Months' EXPERIENCE_MN -- Added for SR 180226
+         ,hr_general.decode_lookup ('MAR_STATUS',
+                                   papf.marital_status
+                                  ) marrg_status,
+		flv.meaning EMPLOYEE_GROUP, -- Added for SR 180226
+         flv1.meaning EMPLOYEE_TYPE, -- Added for SR 3000311
+         (SELECT COUNT (con.contact_person_id)
+            FROM per_contact_relationships con,
+                 hr_lookups hl,
+               --  per_all_people_f ppf
+			   per_people_f ppf -- Added for SR 192369
+           WHERE con.contact_person_id = ppf.person_id
+             AND hl.lookup_type(+) = ('CONTACT')
+             AND con.contact_type = hl.lookup_code(+)
+             AND con.contact_type IN (
+                                  SELECT lookup_code
+                                    FROM hr_lookups
+                                   WHERE lookup_type =
+                                                      'XXOA_PRIMARY_DEPENDENT')
+             AND con.person_id = papf.person_id) depent,
+         xxoa_hr_emp_qualification_fns (papf.person_id) qualification,
+         xxoa_hr_emp_qual_sub_type_fns (papf.person_id) qual_sub_type,
+         paaf.location_id, papf.effective_start_date, papf.effective_end_date,
+         paaf.effective_start_date, paaf.effective_end_date,
+         pg.attribute1 grade_grp,
+        /* (hr_person_type_usage_info.get_user_person_type (SYSDATE,
+                                                          papf.person_id
+                                                         )
+         ) person_type, */-- commented for the SR#408285
+		-- SUBSTR((hr_person_type_usage_info.get_user_person_type (SYSDATE,papf.person_id)), 0, INSTR((hr_person_type_usage_info.get_user_person_type (SYSDATE,papf.person_id)), '.')-1)person_type, -- Added for the SR#408285
+		 ----
+		 SUBSTR((hr_person_type_usage_info.get_user_person_type (SYSDATE,papf.person_id)), 1, 
+    CASE WHEN INSTR((hr_person_type_usage_info.get_user_person_type (SYSDATE,papf.person_id)), '.') > 0 
+    THEN INSTR((hr_person_type_usage_info.get_user_person_type (SYSDATE,papf.person_id)), '.') - 1 
+    ELSE LENGTH((hr_person_type_usage_info.get_user_person_type (SYSDATE,papf.person_id))) END )person_type,
+         hr_general.decode_job (paaf.job_id) job_name,
+		 pppf.payroll_name PAYROLL_NAME, -- Added for SR 180226
+         (SELECT full_name
+          --  FROM per_all_people_f
+		    FROM per_people_f  --- Added for SR 192369
+           WHERE person_id = paaf.ass_attribute8
+             AND TRUNC (SYSDATE) BETWEEN effective_start_date
+                                     AND effective_end_date) line_manager,
+         (SELECT full_name
+           -- FROM per_all_people_f
+		    FROM per_people_f  --- Added for SR 192369
+           WHERE person_id = paaf.supervisor_id
+             AND TRUNC (SYSDATE) BETWEEN effective_start_date
+                                     AND effective_end_date) supervisor
+    FROM per_people_f papf,
+         per_assignments_f paaf,
+		 pay_payrolls_f pppf,
+         per_grades pg,
+         per_all_positions pap,
+         per_periods_of_service pos,
+         hr_organization_units hou,
+         hr_locations_all hla,
+         hr_lookups hl1,
+         pay_people_groups ppg,
+         pay_payrolls_f ppf,
+		 fnd_lookup_values flv , -- Added for SR 201200
+          fnd_lookup_values flv1 -----Added for SR 300311 
+   WHERE paaf.organization_id = hou.organization_id
+    and (xxoa_hr_subsection.get_parent_org 
+                      (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                       paaf.organization_id,
+                       'DEPT',
+                       'ID'
+                      )) = nvl (:p_dept,(xxoa_hr_subsection.get_parent_org
+                      (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                       paaf.organization_id,
+                       'DEPT',
+                       'ID'
+                      )))----added for SR 300311
+   and paaf.payroll_id = pppf.payroll_id
+   AND ppf.payroll_id=NVL(:p_payroll_id,ppf.payroll_id)-----Added for SR 300311
+   and trunc(sysdate) between pppf.effective_start_date and pppf.effective_end_date
+     AND papf.person_id = paaf.person_id
+     AND paaf.payroll_id = ppf.payroll_id
+    -- AND ppf.payroll_id <> 67 commented for SR 192369
+     AND ppg.people_group_id(+) = paaf.people_group_id
+     AND hl1.lookup_code(+) = ppg.segment3
+     AND hl1.lookup_type(+) = 'XXOA_REGION_VS'
+     AND hl1.lookup_code(+) = ppg.segment3
+     AND paaf.effective_start_date =
+            (SELECT MAX (paaf1.effective_start_date)
+            --   FROM per_all_assignments_f paaf1
+			FROM per_assignments_f paaf1 -- added for SR 192369
+              WHERE (:p_end_date BETWEEN paaf1.effective_start_date
+                                     AND paaf1.effective_end_date
+                    )
+                AND paaf1.person_id = paaf.person_id
+                AND paaf1.primary_flag = 'Y')
+     AND papf.effective_start_date =
+            (SELECT MAX (papf1.effective_start_date)
+            --   FROM per_all_people_f papf1
+			   FROM per_people_f papf1 -- Commented for SR 192369
+              WHERE (:p_end_date BETWEEN papf1.effective_start_date
+                                     AND papf1.effective_end_date
+                    )
+                AND papf1.person_id = papf.person_id)
+     AND paaf.primary_flag = 'Y'
+     AND paaf.grade_id = pg.grade_id(+)
+     AND paaf.position_id = pap.position_id(+)
+     AND paaf.person_id = pos.person_id
+     AND paaf.person_id = NVL (:p_person_id, paaf.person_id)
+     AND paaf.effective_start_date BETWEEN pos.date_start
+                                       AND NVL (pos.actual_termination_date,
+                                                paaf.effective_start_date
+                                               )
+	-- Added for SR 201200 :: START
+	 AND flv.lookup_type(+) = 'XXOA_HQ_EMPLOYEE_GROUP'
+	 AND flv.language(+)    = 'US'
+	 AND ppg.segment1       = flv.lookup_code(+)
+      AND  ppg.segment2 =flv1.lookup_code(+) --------------SR 300311
+     AND flv1.lookup_type(+) = 'XXOA_HQ_EMPLOYEE_TYPE'--------------SR 300311
+        AND flv1.language(+)    = 'US'  ----SR 300311
+-- Adde for SR 201200 :: END	 
+     AND hla.location_id(+) = paaf.location_id
+     AND (   (:p_sbu IS NULL AND :p_dept IS NULL)
+          OR (EXISTS (
+                 SELECT     organization_id_child
+                       FROM per_org_structure_elements str
+                      WHERE organization_id_child = paaf.organization_id 
+                 CONNECT BY str.organization_id_parent =
+                                                PRIOR str.organization_id_child
+                        AND str.org_structure_version_id =
+                                         (SELECT organization_structure_id
+                                            FROM per_organization_structures
+                                           WHERE primary_structure_flag = 'Y'
+										   AND business_group_id = fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'))--------SR300311
+                        AND str.business_group_id =
+                                   fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID')
+                 START WITH str.organization_id_child =
+                               NVL ((SELECT organization_id
+                                       FROM hr_all_organization_units
+                                      WHERE organization_id =
+                                                          NVL (:p_sbu,
+                                                               :p_dept)),
+                                    paaf.organization_id
+                                   ))
+             )
+         )
+ORDER BY sbu, department, section, subsection, LPAD (papf.employee_number, 10)
+
+]]>
+</sqlStatement>
+</dataQuery>
+  <dataStructure>
+	<group name="G_MAIN1" source="Q_MAIN1">
+		<element name="NAME"				datatype="VARCHAR2"		value="name"/>	
+		<element name="POSITION1"			datatype="VARCHAR2"		value="position1"/>	
+	</group>
+	<group name="G_MAIN2" source="Q_MAIN2">
+		<element name="SDATE"				datatype="DATE"		value="sdate"/>			
+	</group>	
+	<group name="G_MAIN3" source="Q_MAIN3">
+		<element name="SDATE1"				datatype="DATE"		value="sdate1"/>			
+	</group>
+	<group name="G_MAIN4" source="Q_MAIN4">
+		<element name="PY_NAME"				datatype="VARCHAR2"		value="PY_NAME"/>			
+		<element name="PE_date"				datatype="DATE"		value="PE_date"/>
+		<element name="PM_SBU"				datatype="VARCHAR2"		value="PM_SBU"/>
+		<element name="PM_DEPT"				datatype="VARCHAR2"		value="PM_DEPT"/>
+		<element name="PAYROLL_NAME"	datatype="VARCHAR2"		value="PAYROLL_NAME"/>
+		<element name="PM_CURRENCY_CODE"				datatype="VARCHAR2"		value="PM_CURRENCY_CODE"/>
+		<element name="PM_EMPNO"				datatype="VARCHAR2"		value="PM_EMPNO"/>
+		<element name="SECURITY_PROFILE_NAME"	datatype="VARCHAR2"		value="SECURITY_PROFILE_NAME"/>		
+	</group>
+	<group name="G_MAIN" source="Q_MAIN">		
+		<element name="EMP_NO"			datatype="VARCHAR2"		value="EMP_NO"/>		
+		<element name="F_NAME"			datatype="VARCHAR2"		value="f_NAME"/>
+		<element name="ARABIC_NAME"		datatype="VARCHAR2"		value="ARABIC_NAME"/> --- Added For SR 269623
+		<element name="DOJ"				datatype="VARCHAR2"		value="DOJ"/>
+		<element name="office_loc"		datatype="VARCHAR2"		value="office_loc"/>		
+		<element name="SBU"				datatype="VARCHAR2"		value="SBU"/>		
+		<element name="SECTION"			datatype="VARCHAR2"		value="SECTION"/>	
+		<element name="SUBSECTION"		datatype="VARCHAR2"		value="SUBSECTION"/>		
+		<element name="NATIONALITY"		datatype="VARCHAR2"		value="NATIONALITY"/>		
+		<element name="department"		datatype="VARCHAR2"		value="department"/>		
+		<element name="position"		datatype="VARCHAR2"		value="position"/>
+		<element name="grade"			datatype="VARCHAR2"		value="grade"/>
+		<element name="Region"			datatype="VARCHAR2"		value="Region"/>
+      	<element name="Basic"			datatype="VARCHAR2"		value="Basic"/>		
+		<element name="salary"			datatype="VARCHAR2"		value="salary"/>
+		<element name="curr_code"		datatype="VARCHAR2"		value="curr_code"/>
+		<element name="gender"			datatype="VARCHAR2"		value="gender"/>		
+		<element name="age"				datatype="VARCHAR2"		value="age"/>
+		<element name="marrg_status"	datatype="VARCHAR2"		value="marrg_status"/>		
+		<element name="depent"			datatype="VARCHAR2"		value="depent"/>	
+		<element name="Qualification"	datatype="VARCHAR2"		value="Qualification"/>	
+		<element name="QUAL_SUB_TYPE"	datatype="VARCHAR2"		value="QUAL_SUB_TYPE"/>	
+        <element name="LINE_MANAGER"	datatype="VARCHAR2"		value="LINE_MANAGER"/>			
+		<element name="SUPERVISOR"		datatype="VARCHAR2"		value="SUPERVISOR"/>					
+		<element name="grade_grp"		datatype="VARCHAR2"		value="grade_grp"/>					
+		<element name="ass_status"		datatype="VARCHAR2"		value="ass_status"/>
+		<element name="date_of_birth"	datatype="VARCHAR2"		value="date_of_birth"/>
+    	<element name="PERSON_TYPE"		datatype="VARCHAR2"		value="person_type"/>
+		<element name="JOB_NAME"		datatype="VARCHAR2"		value="job_name"/>
+		<element name="NATIONAL_ID"	    datatype="VARCHAR2"		value="NATIONAL_ID"/>	  
+		<element name="SALARY_BASIS"	datatype="VARCHAR2"		value="SALARY_BASIS"/>
+		<element name="EXPERIENCE"		datatype="VARCHAR2"		value="EXPERIENCE"/>
+		<element name="EXPERIENCE_MN"	datatype="VARCHAR2"		value="EXPERIENCE_MN"/>
+		<element name="EMPLOYEE_GROUP"	datatype="VARCHAR2"		value="EMPLOYEE_GROUP"/>
+		<element name="EMPLOYEE_TYPE"	datatype="VARCHAR2"		value="EMPLOYEE_TYPE"/>
+		<element name="PAYROLL_NAME"	datatype="VARCHAR2"		value="PAYROLL_NAME"/>
+		<element name="GROSS_SALARY_OMAN"	datatype="VARCHAR2"		value="GROSS_SALARY_OMAN"/>
+		<element name="FIXED_ALLOWANCE"		datatype="VARCHAR2"		value="FIXED_ALLOWANCE"/>
+		<element name="VAR_ALLOWANCE"		datatype="VARCHAR2"		value="VAR_ALLOWANCE"/>
+		<element name="SI_EMP"				datatype="VARCHAR2"		value="SI_EMP"/>
+		<element name="SI_EMPR"				datatype="VARCHAR2"		value="SI_EMPR"/>
+		<element name="JS_EMP"				datatype="VARCHAR2"		value="JS_EMP"/>
+		<element name="JS_EMPR"		        datatype="VARCHAR2"		value="JS_EMPR"/>
+		<element name="MP_EMPR"				datatype="VARCHAR2"		value="MP_EMPR"/> 
+		
+	</group>
+	</dataStructure>
+</dataTemplate>
