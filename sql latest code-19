@@ -1,0 +1,77 @@
+SELECT 
+    -- Required Columns
+    poh.segment1 AS "PO Number",
+    poh.document_status AS "PO Header Status",
+    pos.segment1 AS "Vendor Number",
+    hp.party_name AS "Vendor Name",
+    per_created.full_name AS "PO Created By",
+    TO_CHAR(poh.creation_date, 'DD.MM.YYYY', 'NLS_DATE_LANGUAGE = AMERICAN') AS "PO Creation Date",
+    TO_CHAR(poh.submit_date, 'DD.MM.YYYY', 'NLS_DATE_LANGUAGE = AMERICAN') AS "Submit Date",
+    poh.currency_code AS "Currency Code",
+    (SELECT SUM(ROUND(unit_price * quantity, 2))
+     FROM po_lines_all 
+     WHERE po_header_id = poh.po_header_id) AS "PO Amount",
+    
+    -- Company Code & PO Company Name
+    gce.segment1 AS "Company Code",
+    fab.bu_name AS "PO Company Name",
+    
+    -- Selected Approver (highest non-null from L1-L5)
+    CASE 
+        WHEN poapp.l5_approved_by IS NOT NULL THEN poapp.l5_approved_by
+        WHEN poapp.l4_approved_by IS NOT NULL THEN poapp.l4_approved_by
+        WHEN poapp.l3_approved_by IS NOT NULL THEN poapp.l3_approved_by
+        WHEN poapp.l2_approved_by IS NOT NULL THEN poapp.l2_approved_by
+        ELSE poapp.l1_approved_by 
+    END AS "Selected Approver",
+    
+    -- Previous Approver (one level before selected)
+    CASE 
+        WHEN poapp.l5_approved_by IS NOT NULL THEN poapp.l4_approved_by
+        WHEN poapp.l4_approved_by IS NOT NULL THEN poapp.l3_approved_by
+        WHEN poapp.l3_approved_by IS NOT NULL THEN poapp.l2_approved_by
+        WHEN poapp.l2_approved_by IS NOT NULL THEN poapp.l1_approved_by
+        ELSE NULL
+    END AS "Previous Approver",
+    
+    -- Approval Dates & Notes
+    poapp.l1_approved_dt AS "Approval Date by L1",
+    poapp.note1 AS "Note1",
+    poapp.l2_approved_dt AS "Approval Date by Selected Approver",
+    poapp.note2 AS "Note2",
+    
+    -- Days Calculations
+    TRUNC(SYSDATE) - TRUNC(poapp.previous_approval_dt) AS "Total Days Pending from Previous Approver",
+    TRUNC(poapp.selected_approval_dt) - TRUNC(poapp.previous_approval_dt) AS "Total Days Taken by Selected Approver",
+    TRUNC(SYSDATE) - TRUNC(poh.submit_date) AS "Total Days Pending from Submission",
+    
+    -- PO USD Amount
+    (SELECT SUM(ROUND(unit_price * quantity * NVL(rate.conversion_rate, 1), 2))
+     FROM po_lines_all pl, gl_daily_rates rate
+     WHERE pl.po_header_id = poh.po_header_id
+       AND rate.from_currency = poh.currency_code
+       AND rate.to_currency = 'USD'
+       AND TO_CHAR(rate.conversion_date, 'MM-DD-YYYY') = TO_CHAR(poh.creation_date, 'MM-DD-YYYY')
+       AND rate.conversion_type = 'Corporate') AS "PO USD Amount"
+
+FROM po_headers_all poh
+    LEFT JOIN po_lines_all pol ON poh.po_header_id = pol.po_header_id
+    LEFT JOIN po_distributions_all pod ON pol.po_line_id = pod.po_line_id 
+                                       AND pol.po_header_id = pod.po_header_id
+    LEFT JOIN gl_code_combinations gce ON pod.code_combination_id = gce.code_combination_id
+    LEFT JOIN pos_suppliers_v pos ON poh.vendor_id = pos.vendor_id
+    LEFT JOIN hz_parties hp ON pos.party_id = hp.party_id
+    LEFT JOIN fun_all_business_units_v fab ON poh.prc_bu_id = fab.bu_id
+    LEFT JOIN po_approval poapp ON poh.po_header_id = poapp.po_header_id 
+                                AND poh.prc_bu_id = poapp.prc_bu_id
+                                AND poh.segment1 = poapp.segment1
+    LEFT JOIN per_users pru ON pru.username = poh.created_by
+    LEFT JOIN per_person_names_f_v per_created ON pru.person_id = per_created.person_id
+
+WHERE poh.type_lookup_code IN ('STANDARD', 'BLANKET', 'CONTRACT')
+  AND poh.document_status NOT IN ('CANCELED', 'INCOMPLETE')
+  AND fab.bu_name = NVL(:P_COMPANY_NAME, fab.bu_name)
+  AND poh.document_status = NVL(:P_PO_STATUS, poh.document_status)
+  AND TRUNC(poh.creation_date) BETWEEN NVL(:START_DATE_PO, TRUNC(poh.creation_date)) 
+                                   AND NVL(:END_DATE_PO, TRUNC(poh.creation_date))
+  AND poh.segment1 = NVL(:P_PO_NUMBER, poh.segment1)
