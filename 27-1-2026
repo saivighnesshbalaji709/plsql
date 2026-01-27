@@ -1,0 +1,432 @@
+nd <!-- GSCC_Category="Xdo Data Definition" -->
+<dataTemplate name="XXOAHRBONDSECDETL"  version="1.0"> 
+<properties>
+  <property name="xml_tag_case" value="UPPER"/>
+  <property name="debug_mode"   value="ON"/>
+</properties>
+<parameters>
+		<parameter name="P_EFFECTIVE_DATE"	dataType = "DATE"></parameter>
+		<parameter name="P_PERSON_ID"       dataType = "NUMBER"></parameter>
+		<parameter name="P_PAYROLL_ID"		dataType = "NUMBER"></parameter>
+</parameters>
+
+<dataQuery>
+
+<sqlStatement name="Q_MAIN4">
+<![CDATA[
+	select TO_CHAR(:P_EFFECTIVE_DATE,'DD-MON-RRRR') PE_date,
+			 replace(','||to_char(sysdate,'DD-MON-YYYY HH24:MM:SS'),',','"') sdate,
+			 (select PAYROLL_NAME  from apps.pay_payrolls_f where payroll_id=:P_PAYROLL_ID) PY_NAME, 
+			(
+			  select employee_number
+				from per_people_f papf
+			  where 1 = 1
+				 and papf.person_id = :P_PERSON_ID
+				 and trunc(sysdate) between papf.effective_start_date and papf.effective_end_date 
+				 and rownum = 1
+			) PM_EMPNO		
+	  from dual
+]]>
+</sqlStatement>
+<sqlStatement name="Q_MAIN">
+<![CDATA[	
+/*************New report query as per SR#417658********************/ 
+( SELECT
+    papf.employee_number       emp_no,
+    papf.full_name             f_name,
+    decode(nvl(papf.current_employee_flag, 'N'), 'Y', 'Active Employee', 'N', 'Ex Employee') emp_status,
+    papf.national_identifier   national_id,
+    to_char((ppos.date_start),'DD-MON-YYYY') doj,
+    ppf.payroll_name,
+    pg.name grade,
+    pp.name position,
+    xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'SBU', 'NAME') sbu,
+    xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'DEPT', 'NAME') department,
+    xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'SE', 'NAME') section,
+    paaf.assignment_id,
+    paaf.payroll_id,
+    ppa.effective_date,
+    (
+        SELECT
+            ( prrv1.result_value ) value
+        FROM
+            pay_run_result_values   prrv1,
+            pay_input_values_f      piv1
+        WHERE
+            1 = 1
+            AND prrv1.run_result_id = prrv.run_result_id
+            AND prrv1.input_value_id = piv1.input_value_id
+            AND piv1.name = 'Remarks'
+    ) remarks,
+    (
+        SELECT
+            ( prrv1.result_value ) value
+        FROM
+            pay_run_result_values   prrv1,
+            pay_input_values_f      piv1
+        WHERE
+            1 = 1
+            AND prrv1.run_result_id = prrv.run_result_id
+            AND prrv1.input_value_id = piv1.input_value_id
+            AND piv1.name = 'Total Amount'
+    ) "Total_AMT",
+    (
+        SELECT
+            ( prrv1.result_value ) value
+        FROM
+            pay_run_result_values   prrv1,
+            pay_input_values_f      piv1
+        WHERE
+            1 = 1
+            AND prrv1.run_result_id = prrv.run_result_id
+            AND prrv1.input_value_id = piv1.input_value_id
+            AND piv1.name = 'No Of Installment'
+    ) "No_Of_Installment",
+    (
+        SELECT
+            ( prrv1.result_value ) value
+        FROM
+            pay_run_result_values   prrv1,
+            pay_input_values_f      piv1
+        WHERE
+            1 = 1
+            AND prrv1.run_result_id = prrv.run_result_id
+            AND prrv1.input_value_id = piv1.input_value_id
+            AND piv1.name = 'Installment Amount'
+    ) "Installment_Amount",
+       pbv1.value  total_deducted_amount ,
+       pbv2.value  "Remaining_Amount"
+--piv.name input_value ,(prrv.result_value) v_amt
+FROM
+    apps.pay_payroll_actions     ppa,
+    pay_assignment_actions       paa,
+    pay_payrolls_f               pp,
+    pay_run_results              prr,
+    pay_run_result_values        prrv,
+    pay_input_values_f           piv,
+    pay_element_types_f          pet,
+    apps.per_all_assignments_f   paaf,
+    apps.per_all_people_f        papf,
+	per_periods_of_service       ppos,
+	pay_payrolls_f				 ppf,
+	per_grades					 pg,
+	per_positions				 pp,
+    pay_balance_values_v         pbv1,
+    pay_balance_values_v         pbv2
+WHERE
+    1 = 1
+    AND ppa.payroll_id = :p_payroll_id
+--and papf.person_id like nvl( :p_person_id,papf.person_id)
+    AND papf.employee_number LIKE nvl(:pm_empno, papf.employee_number)
+    AND ppa.payroll_action_id = paa.payroll_action_id
+    AND ppa.payroll_id = pp.payroll_id
+    AND paa.assignment_action_id = prr.assignment_action_id
+    AND prr.run_result_id = prrv.run_result_id
+    AND prrv.input_value_id = piv.input_value_id
+    AND piv.element_type_id = pet.element_type_id
+    AND paaf.assignment_id = paa.assignment_id
+    AND paaf.person_id = papf.person_id
+	AND papf.person_id = ppos.person_id
+	AND paaf.payroll_id = ppf.payroll_id
+	AND paaf.grade_id = pg.grade_id
+	AND paaf.position_id = pp.position_id
+    AND paaf.assignment_id = pbv1.assignment_id
+    AND pbv1.balance_name = 'Bond Security Recovery'
+    AND pbv1.database_item_suffix = '_ASG_ITD'
+    AND pbv1.effective_date = ppa.effective_date
+    AND pbv1.payroll_action_id = ppa.payroll_action_id
+    AND paaf.assignment_id = pbv2.assignment_id
+    AND pbv2.balance_name = 'Bond Security Balance'
+    AND pbv2.database_item_suffix = '_ASG_ITD'
+    AND pbv2.effective_date  = ppa.effective_date
+    AND pbv2.payroll_action_id = ppa.payroll_action_id
+    AND trunc(ppa.effective_date) BETWEEN pp.effective_start_date AND pp.effective_end_date
+    AND trunc(ppa.effective_date) BETWEEN pet.effective_start_date AND pet.effective_end_date
+    AND trunc(ppa.effective_date) BETWEEN piv.effective_start_date AND piv.effective_end_date
+    AND trunc(ppa.effective_date) BETWEEN paaf.effective_start_date AND paaf.effective_end_date
+    AND trunc(sysdate) BETWEEN papf.effective_start_date AND papf.effective_end_date
+	AND trunc(sysdate) BETWEEN ppf.effective_start_date AND nvl(ppf.effective_end_date, to_date('31-Dec-4712'))
+	AND trunc(sysdate) BETWEEN pg.date_from AND nvl(pg.date_to, to_date('31-Dec-4712'))
+	AND trunc(sysdate) BETWEEN pp.date_effective AND nvl(pp.date_end, to_date('31-Dec-4712')) 
+	-----AND pbv2.value <> 0
+	 AND nvl( (
+        SELECT  sum(to_number(PEEVF1.SCREEN_ENTRY_VALUE ))
+        FROM
+        PAY_ELEMENT_TYPES_F PETF1 ,
+        PAY_ELEMENT_ENTRIES_F PEEF1 ,
+        PER_ALL_ASSIGNMENTS_F PAAF1 ,
+        PAY_ELEMENT_ENTRY_VALUES_F PEEVF1 ,
+        PAY_INPUT_VALUES_F PIVF1
+        WHERE 1 = 1
+        AND PEEF1.ELEMENT_TYPE_ID = PETF1.ELEMENT_TYPE_ID
+        AND PIVF1.ELEMENT_TYPE_ID = PETF1.ELEMENT_TYPE_ID
+        AND PEEF1.EFFECTIVE_START_DATE BETWEEN TRUNC(PIVF1.EFFECTIVE_START_DATE) AND TRUNC(PIVF1.EFFECTIVE_END_DATE)
+        AND PAAF1.ASSIGNMENT_ID = PEEF1.ASSIGNMENT_ID
+        AND PEEF1.EFFECTIVE_START_DATE BETWEEN TRUNC(PAAF1.EFFECTIVE_START_DATE) AND TRUNC(PAAF1.EFFECTIVE_END_DATE)
+        AND PEEVF1.ELEMENT_ENTRY_ID = PEEF1.ELEMENT_ENTRY_ID
+        AND PIVF1.INPUT_VALUE_ID = PEEVF1.INPUT_VALUE_ID
+        AND PIVF1.NAME ='Pay Value'
+       --- and PEEVF1.SCREEN_ENTRY_VALUE  = to_char(pbv1.value)
+        AND PAAF1.primary_flag = 'Y'
+        AND PAAF1.assignment_type = 'E'
+        AND PETF1.ELEMENT_NAME =  'Bond Security Deduction Repayment'
+        AND PAAF1.ASSIGNMENT_ID = paaf.assignment_id),0) <> to_char(pbv1.value)
+	AND ppa.payroll_action_id IN (
+        SELECT
+            MAX(ppa1.payroll_action_id)
+        FROM
+            pay_assignment_actions   paa1,
+            pay_payroll_actions      ppa1,
+            pay_consolidation_sets   pcs,
+            pay_run_results              prr1,
+            pay_run_result_values        prrv1,
+            pay_input_values_f           piv1,
+            pay_element_types_f          pet1
+            WHERE
+            1 = 1
+            AND paa1.assignment_action_id = prr1.assignment_action_id
+            AND prr1.run_result_id = prrv1.run_result_id
+            AND ppa1.payroll_action_id = paa1.payroll_action_id
+            AND prrv1.input_value_id = piv1.input_value_id
+            AND piv1.element_type_id = pet1.element_type_id
+            AND piv1.name IN (   'Total Amount'  )
+            AND pet1.element_name = ( 'Bond Security Deduction' )
+            AND paa1.assignment_action_type IN (
+                'R',
+                'Q'
+            )
+            AND paa1.run_type_id = 64
+            AND paa1.assignment_id = paa.assignment_id
+            AND trunc(ppa1.effective_date) BETWEEN piv1.effective_start_date AND piv1.effective_end_date
+            AND trunc(ppa1.effective_date) BETWEEN pet1.effective_start_date AND pet1.effective_end_date
+            AND trunc(ppa1.effective_date) <= last_day(:p_effective_date)
+            AND pcs.consolidation_set_id (+) = ppa1.consolidation_set_id
+            AND (
+            upper(pcs.consolidation_set_name) like 'MONTHLY%MASS%'
+            OR upper(consolidation_set_name) = 'ADHOC PAYROLL'
+            OR upper(consolidation_set_name) = 'FINAL SETTLEMENT'
+            )
+    )
+---and :p_effective_date between ptp.start_date and nvl(ptp.end_date,to_date('31-Dec-4712'))
+    AND element_name = ( 'Bond Security Deduction' )
+    AND piv.name IN (
+        'Total Amount'
+    )
+)
+/************Commented as per SR#417658**************************/
+/*( SELECT
+    papf.employee_number       emp_no,
+    papf.full_name             f_name,
+    (
+        SELECT
+            decode(nvl(current_employee_flag, 'N'), 'Y', 'Active Employee', 'N', 'Ex Employee')
+        FROM
+            per_all_people_f p
+        WHERE
+            p.employee_number = papf.employee_number
+            AND trunc(sysdate) BETWEEN trunc(p.effective_start_date) AND trunc(p.effective_end_date)
+            AND ROWNUM = 1
+    ) emp_status,
+    papf.national_identifier   national_id,
+    to_char((
+        SELECT
+            MAX(date_start)
+        FROM
+            per_periods_of_service
+        WHERE
+            person_id = paaf.person_id
+    ), 'DD-MON-YYYY') doj,
+    (
+        SELECT
+            payroll_name
+        FROM
+            pay_payrolls_f
+        WHERE
+            payroll_id = paaf.payroll_id
+    ) payroll_name,
+    (
+        SELECT
+            name
+        FROM
+            per_grades
+        WHERE
+            grade_id = paaf.grade_id
+    ) grade,
+    (
+        SELECT
+            name
+        FROM
+            per_positions
+        WHERE
+            position_id = paaf.position_id
+            AND trunc(paaf.effective_start_date) BETWEEN date_effective AND nvl(date_end, to_date('31-Dec-4712'))
+    ) position,
+    xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'SBU', 'NAME') sbu,
+    xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'DEPT', 'NAME') department,
+    xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'SE', 'NAME') section,
+    paaf.assignment_id,
+    paaf.payroll_id,
+    ppa.effective_date,
+    (
+        SELECT
+            ( prrv1.result_value ) value
+        FROM
+            pay_run_result_values   prrv1,
+            pay_input_values_f      piv1
+        WHERE
+            1 = 1
+            AND prrv1.run_result_id = prrv.run_result_id
+            AND prrv1.input_value_id = piv1.input_value_id
+            AND piv1.name = 'Remarks'
+    ) remarks,
+    (
+        SELECT
+            ( prrv1.result_value ) value
+        FROM
+            pay_run_result_values   prrv1,
+            pay_input_values_f      piv1
+        WHERE
+            1 = 1
+            AND prrv1.run_result_id = prrv.run_result_id
+            AND prrv1.input_value_id = piv1.input_value_id
+            AND piv1.name = 'Total Amount'
+    ) "Total_AMT",
+    (
+        SELECT
+            ( prrv1.result_value ) value
+        FROM
+            pay_run_result_values   prrv1,
+            pay_input_values_f      piv1
+        WHERE
+            1 = 1
+            AND prrv1.run_result_id = prrv.run_result_id
+            AND prrv1.input_value_id = piv1.input_value_id
+            AND piv1.name = 'No Of Installment'
+    ) "No_Of_Installment",
+    (
+        SELECT
+            ( prrv1.result_value ) value
+        FROM
+            pay_run_result_values   prrv1,
+            pay_input_values_f      piv1
+        WHERE
+            1 = 1
+            AND prrv1.run_result_id = prrv.run_result_id
+            AND prrv1.input_value_id = piv1.input_value_id
+            AND piv1.name = 'Installment Amount'
+    ) "Installment_Amount",
+    (
+        SELECT
+            pbv1.value
+        FROM
+            pay_balance_values_v pbv1
+        WHERE
+            1 = 1
+            AND paaf.assignment_id = pbv1.assignment_id
+            AND pbv1.balance_name = 'Bond Security Recovery'
+            AND pbv1.database_item_suffix = '_ASG_ITD'
+            AND ( pbv1.effective_date ) = ppa.date_earned
+    ) total_deducted_amount,
+    (
+        SELECT
+            pbv.value
+        FROM
+            pay_balance_values_v pbv
+        WHERE
+            1 = 1
+            AND paaf.assignment_id = pbv.assignment_id
+            AND pbv.balance_name = 'Bond Security Balance'
+            AND pbv.database_item_suffix = '_ASG_ITD'
+            AND ( pbv.effective_date ) = ppa.date_earned
+    ) "Remaining_Amount"
+--piv.name input_value ,(prrv.result_value) v_amt
+FROM
+    apps.pay_payroll_actions     ppa,
+    pay_assignment_actions       paa,
+    pay_payrolls_f               pp,
+    pay_run_results              prr,
+    pay_run_result_values        prrv,
+    pay_input_values_f           piv,
+    pay_element_types_f          pet,
+    apps.per_all_assignments_f   paaf,
+    apps.per_all_people_f        papf
+WHERE
+    1 = 1
+    AND ppa.payroll_id = :p_payroll_id
+--and papf.person_id like nvl( :p_person_id,papf.person_id)
+    AND papf.employee_number LIKE nvl(:pm_empno, papf.employee_number)
+    AND ppa.payroll_action_id = paa.payroll_action_id
+    AND ppa.payroll_id = pp.payroll_id
+    AND paa.assignment_action_id = prr.assignment_action_id
+    AND prr.run_result_id = prrv.run_result_id
+    AND prrv.input_value_id = piv.input_value_id
+    AND piv.element_type_id = pet.element_type_id
+    AND paaf.assignment_id = paa.assignment_id
+    AND paaf.person_id = papf.person_id
+    AND trunc(ppa.effective_date) BETWEEN pp.effective_start_date AND pp.effective_end_date
+    AND trunc(ppa.effective_date) BETWEEN pet.effective_start_date AND pet.effective_end_date
+    AND trunc(ppa.effective_date) BETWEEN piv.effective_start_date AND piv.effective_end_date
+    AND trunc(ppa.effective_date) BETWEEN paaf.effective_start_date AND paaf.effective_end_date
+    AND trunc(ppa.effective_date) BETWEEN papf.effective_start_date AND papf.effective_end_date
+    AND ppa.payroll_action_id IN (
+        SELECT
+            MAX(ppa1.payroll_action_id)
+        FROM
+            pay_assignment_actions   paa1,
+            pay_payroll_actions      ppa1,
+            pay_consolidation_sets   pcs
+        WHERE
+            1 = 1
+            AND ppa1.payroll_action_id = paa1.payroll_action_id
+            AND paa1.assignment_action_type IN (
+                'R',
+                'Q'
+            )
+            AND paa1.run_type_id = 64
+            AND paa1.assignment_id = paa.assignment_id
+            AND trunc(ppa1.effective_date) <= last_day(:p_effective_date)
+            AND pcs.consolidation_set_id (+) = ppa1.consolidation_set_id
+            AND pcs.consolidation_set_name NOT IN (
+                'Final Settlement'
+            )
+    )
+---and :p_effective_date between ptp.start_date and nvl(ptp.end_date,to_date('31-Dec-4712'))
+    AND element_name = ( 'Bond Security Deduction' )
+    AND piv.name IN (
+        'Total Amount'
+    )
+)*/
+]]>
+</sqlStatement>
+</dataQuery>
+  <dataStructure>
+	
+		<group name="G_MAIN4" source="Q_MAIN4">
+		<element name="PE_DATE"				datatype="DATE"		value="PE_DATE"/>
+		<element name="PY_NAME"				datatype="VARCHAR2"		value="PY_NAME"/>
+		<element name="PM_EMPNO"			datatype="VARCHAR2"		value="PM_EMPNO"/> 
+		
+	</group>
+	<group name="G_MAIN" source="Q_MAIN">		
+		<element name="EMP_NO"			datatype="VARCHAR2"		value="EMP_NO"/>		
+		<element name="F_NAME"			datatype="VARCHAR2"		value="F_NAME"/>
+		<element name="EMP_STATUS"			datatype="VARCHAR2"		value="EMP_STATUS"/>
+		<element name="NATIONAL_ID"	    datatype="VARCHAR2"		value="NATIONAL_ID"/>
+		<element name="DOJ"	    		datatype="VARCHAR2"		value="DOJ"/>
+		<element name="GRADE"			datatype="VARCHAR2"		value="GRADE"/>
+		<element name="POSITION"		datatype="VARCHAR2"		value="POSITION"/>
+		<element name="PAYROLL_NAME"	datatype="VARCHAR2"		value="PAYROLL_NAME"/>
+		<element name="SBU"				datatype="VARCHAR2"		value="SBU"/>	
+		<element name="DEPARTMENT"		datatype="VARCHAR2"		value="DEPARTMENT"/>		
+		<element name="SECTION"			datatype="VARCHAR2"		value="SECTION"/>	
+    	<element name="TOTAL_AMT"		datatype="NUMBER"		value="TOTAL_AMT"/>
+		<element name="NO_OF_INSTALLMENT"	datatype="NUMBER"		value="NO_OF_INSTALLMENT"/>
+		<element name="INSTALLMENT_AMOUNT"	datatype="NUMBER"		value="INSTALLMENT_AMOUNT"/>
+		<element name="TOTAL_DEDUCTED_AMOUNT"	datatype="NUMBER"		value="TOTAL_DEDUCTED_AMOUNT"/>
+		<element name="REMAINING_AMOUNT"	datatype="NUMBER"		value="REMAINING_AMOUNT"/>
+		<element name="REMARKS"		datatype="VARCHAR2"		value="REMARKS"/>	
+		
+		
+	</group>
+	</dataStructure>
+</dataTemplate>
