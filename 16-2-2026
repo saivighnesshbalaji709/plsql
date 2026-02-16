@@ -1,0 +1,141 @@
+/*------------------------------------------------------------------------------------------
+SR   : 345320
+Issue Name      : Employee details view
+Description     : Creation of XXOA_EMP_DETAILS_V view 
+
+---------------------------------------------------------------------------------------------------------------
+Date            Author            Version    	Remarks
+05-Mar-2023     Rishan       	    1.0         Initial Development
+23-Mar-2023		Rishan			    1.1			SR#347039 Add nationality to view "XXOA_EMP_DETAILS_V"
+25-Sep-2023	    Vijayadurga Nayudu  1.2         SR#366007 Additional columns (DEPT_HOD_NAME,DEPT_HOD_EMP_NUM,SECTION_HOD_NAME,SECTION_HOD_EMP_NUM)
+27-May-2024	    Rishan		        1.3      	SR#386183##  Add new column to XXOA_EMP_DETAILS_V
+17-Nov-2025	    Sai Vighnessh B L   1.4		    SR#426703##  Add new column to XXOA_EMP_DETAILS_V
+---------------------------------------------------------------------------------------------------------------*/-- 
+
+
+SPOOL XXOA_EMP_DETAILS_V_366007.txt;
+SET SERVEROUTPUT ON;
+SET DEFINE OFF
+
+
+CREATE OR REPLACE  VIEW APPS.XXOA_EMP_DETAILS_V
+ (
+    Staff_Number,
+    Staff_Name,
+	Nationality,  ---added for 347039
+    Staff_Hire_Date,
+    Staff_Email,
+    SBU,
+    Department,
+	DEPT_HOD_NAME,        ---- Added for SR#366007
+	DEPT_HOD_EMP_NUM,     ---- Added for SR#366007
+    Section,
+	SECTION_HOD_NAME,     ---- Added for SR#366007
+	SECTION_HOD_EMP_NUM,  ---- Added for SR#366007
+    Staff_Position,
+    Staff_Location,
+    Employee_Status,      ---- Added for SR#426703
+	supervisor_emp_no, -- Added for SR#386183
+	supervisor_emp_name, -- Added for SR#386183
+	supervisor_email, -- Added for SR#386183
+	line_mang_emp_no,  -- Added for SR#386183
+	line_mang_emp_name,  -- Added for SR#386183
+	line_mang_email -- Added for SR#386183
+) AS
+SELECT
+    papf.employee_number   staff_number,
+    papf.full_name         staff_name,
+		---added for SR 347039---
+    hr_general.decode_lookup('NATIONALITY', papf.nationality) nationality,
+		---end for SR 347039---
+    to_char((
+        SELECT
+            MAX(date_start)
+        FROM
+            per_periods_of_service
+        WHERE
+            person_id = paaf.person_id
+    ), 'DD-MON-YYYY') staff_hire_date,
+    papf.email_address     staff_email,
+    xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'SBU', 'NAME') sbu,
+    xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'DEPT', 'NAME') department,
+    xxoa_hr.get_org_manager_det(xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'DEPT', 'ID'
+    ), sysdate, 'NAME') dept_hod_name,    ---- Added for SR#366007
+    xxoa_hr.get_org_manager_det(xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'DEPT', 'ID'
+    ), sysdate, 'NO') dept_hod_emp_num,     ---- Added for SR#366007
+    xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'SE', 'NAME') section,
+    xxoa_hr.get_org_manager_det(xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'SE', 'ID'
+    ), sysdate, 'NAME') section_hod_name,   ---- Added for SR#366007
+    xxoa_hr.get_org_manager_det(xxoa_hr.get_parent_org(fnd_profile.value('PER_BUSINESS_GROUP_ID'), paaf.organization_id, 'SE', 'ID'
+    ), sysdate, 'NO') section_hod_emp_num,   ---- Added for SR#366007
+    pap.name               staff_position,
+    hla.location_code      staff_location,
+	CASE  WHEN  upper ( hr_person_type_usage_info.get_user_person_type(sysdate, papf.person_id) ) like '%EX-EMP%'
+      THEN 'Inactive'
+      ELSE 'Active'
+      END employment_status,               -- Added for SR#426703
+    papf1.employee_number supervisor_emp_no, -- Added for SR#386183
+    papf1.full_name supervisor_emp_name, -- Added for SR#386183
+    papf1.email_address supervisor_email, -- Added for SR#386183
+    papf2.employee_number line_mang_emp_no,  -- Added for SR#386183
+    papf2.full_name line_mang_emp_name,  -- Added for SR#386183
+    papf2.email_address line_mang_email -- Added for SR#386183
+FROM
+    per_people_f             papf,
+    per_people_f             papf1,  -- Added for SR#386183
+    per_people_f             papf2,  -- Added for SR#386183
+    per_assignments_f        paaf,
+    per_all_positions        pap,
+    per_periods_of_service   pos,
+    hr_locations_all         hla
+WHERE
+    1 = 1
+      --  AND papf.employee_number='60532'
+      --  AND papf.person_id = 13199
+    AND nvl(papf.current_employee_flag, 'N') = 'Y'
+    AND papf.person_id = paaf.person_id
+    AND paaf.effective_start_date = (
+        SELECT
+            MAX(paaf1.effective_start_date)
+            --   FROM per_all_assignments_f paaf1
+        FROM
+            per_assignments_f paaf1
+        WHERE
+            ( trunc(sysdate) BETWEEN paaf1.effective_start_date AND paaf1.effective_end_date )
+            AND paaf1.person_id = paaf.person_id
+            AND paaf1.primary_flag = 'Y'
+    )
+    AND papf.effective_start_date = (
+        SELECT
+            MAX(papf1.effective_start_date)
+            --   FROM per_all_people_f papf1
+        FROM
+            per_people_f papf1
+        WHERE
+            ( trunc(sysdate) BETWEEN papf1.effective_start_date AND papf1.effective_end_date
+              AND papf1.person_id = papf.person_id )
+    )
+    AND paaf.primary_flag = 'Y'
+    AND paaf.payroll_id NOT IN (
+        181,
+        341,
+        361
+    )
+    AND paaf.position_id = pap.position_id (+)
+    AND paaf.person_id = pos.person_id
+    AND paaf.supervisor_id = papf1.person_id  -- Added for SR#386183
+    AND paaf.ass_attribute8 = papf2.person_id  -- Added for SR#386183
+    AND paaf.effective_start_date BETWEEN pos.date_start AND nvl(pos.actual_termination_date, paaf.effective_start_date)
+    AND papf.effective_start_date BETWEEN pos.date_start AND nvl(pos.actual_termination_date, trunc(sysdate))
+    AND trunc(sysdate) between papf1.effective_start_date and papf1.effective_end_date -- Added for SR#386183
+    AND trunc(sysdate) between papf2.effective_start_date and papf2.effective_end_date -- -- Added for SR#386183
+    AND hla.location_id (+) = paaf.location_id;
+        CREATE OR REPLACE SYNONYM XXHRVIEW.XXOA_EMP_DETAILS_V FOR APPS.XXOA_EMP_DETAILS_V;
+
+        GRANT SELECT ON APPS.XXOA_EMP_DETAILS_V TO XXHRVIEW;
+
+
+select * from XXOA_EMP_DETAILS_V;
+SELECT * FROM apps.XXOA_EMP_DETAILS_V WHERE STAFF_NUMBER='60609';
+
+
