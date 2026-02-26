@@ -1,0 +1,229 @@
+SELECT
+    employee_number,
+    full_name,
+    start_date,
+    date_of_birth,
+    nationality,
+    designation,
+    grade,
+    end_date,
+    line_manager,
+    hod,
+    smhr,
+    am,
+    cc,
+    send_y_n,
+    payroll_name
+INTO
+    &a,
+    &b,
+    &c,
+    &d,
+    &e,
+    &f,
+    &g,
+    &h,
+    &i,
+    &j,
+    &k,
+    &l,
+    &m,
+    &n,
+    &o
+FROM
+    (
+        SELECT
+            papf.employee_number,
+            papf.full_name,
+            papf.start_date,
+            papf.date_of_birth,
+            hr_general.decode_lookup('NATIONALITY', papf.nationality) nationality,
+            (
+                SELECT
+                    pp.name
+                FROM
+                    per_all_positions pp
+                WHERE
+                    1 = 1
+                    AND pp.position_id = paaf.position_id
+            ) designation,
+            (
+                SELECT
+                    name
+                FROM
+                    per_grades
+                WHERE
+                    1 = 1
+                    AND grade_id = paaf.grade_id
+            ) grade,
+            decode(id_flex_structure_code, 'OA_EMP_CONTRACT_RENEWAL', fnd_date.canonical_to_date(paa.segment3)) end_date,
+            (
+                SELECT
+                    email_address
+                FROM
+                    per_all_people_f
+                WHERE
+                    1 = 1
+                    AND trunc(sysdate) BETWEEN effective_start_date AND effective_end_date
+                    AND current_employee_flag = 'Y'
+                    AND person_id = to_number(paaf.ass_attribute8)
+            ) line_manager,
+  /* Commented For SR 253416 START
+  CASE
+    WHEN apps.xxoa_hr.GET_PARENT_ORG (paaf.business_group_id, paaf.organization_id, 'SBU', 'NAME') = 'Airline SBU'
+    THEN
+             (select email_address from per_all_people_f papf1 where employee_number = '6723'
+       and sysdate between papf1.effective_start_date and papf1.effective_end_date)
+    WHEN apps.xxoa_hr.get_hod(paaf.organization_id,sysdate,'NO') = '92333'
+    THEN
+      (SELECT email_address
+      FROM per_all_people_f papf1
+      WHERE employee_number = '2692'
+      AND sysdate BETWEEN papf1.effective_start_date AND papf1.effective_end_date
+      )
+    WHEN apps.xxoa_hr.get_hod(paaf.organization_id,sysdate,'NO') IS NULL
+    THEN
+      (SELECT email_address
+      FROM per_all_people_f papf1
+      WHERE employee_number = '2692'
+      AND sysdate BETWEEN papf1.effective_start_date AND papf1.effective_end_date
+      )
+    ELSE apps.xxoa_hr.get_hod(paaf.organization_id,sysdate,'EMAIL')
+   END AS HOD, Commented For SR 253416  END*/
+            apps.xxoa_hr.get_hod(paaf.organization_id, sysdate, 'EMAIL') hod,
+			/******Added as per SR#371463**************/
+     (SELECT email_address FROM apps.fnd_user where user_name=(SELECT apps.hruserdt.get_table_value(p_bus_group_id   => paaf.business_group_id
+                                                           ,p_table_name     => 'XXOA_UDT_AME_PAYROLL_WISE'
+                                                           ,p_col_name       => 'Senior Manager HR'
+                                                           ,p_row_value      => ppf.payroll_name
+                                                           ,p_effective_date => sysdate
+                                                           ) from dual)) SMHR,
+     (SELECT email_address FROM apps.fnd_user where user_name=(SELECT apps.hruserdt.get_table_value(p_bus_group_id   => paaf.business_group_id
+                                                           ,p_table_name     => 'XXOA_UDT_AME_PAYROLL_WISE'
+                                                           ,p_col_name       => 'Admin'
+                                                           ,p_row_value      => ppf.payroll_name
+                                                           ,p_effective_date => sysdate
+                                                           ) from dual)) am, 			/******Added as per SR#371463**************/
+  /*Commented For SR 253416  START
+  --- Added For SR 199175 START
+  (
+    SELECT listagg(papf1.email_address, ',' ) within GROUP (ORDER BY papf1.email_address)
+      FROM apps.Pay_User_Tables Put,
+        apps.Pay_User_Rows_F Pur,
+        apps.Pay_User_Columns Puc,
+        apps.Pay_User_Column_Instances_F Pci,
+        apps.per_all_people_f papf1
+      WHERE Put.User_Table_Id        = Puc.User_Table_Id
+      AND Put.User_Table_Id          = Pur.User_Table_Id
+      AND papf1.current_employee_flag='Y'
+      AND pci.value                  =papf1.employee_number
+      AND upper(Put.User_Table_name) = 'XXOA_EMP_CONTRACT_EXPIRY_ALERT'
+      AND upper(Pur.Row_Low_Range_Or_Name) LIKE UPPER('Staff Number%')
+      AND Pur.User_Row_Id      = Pci.User_Row_Id
+      AND Puc.User_Column_Id   = Pci.User_Column_Id
+      AND puc.user_column_name = ppf.payroll_name
+      AND TRUNC (SYSDATE) BETWEEN Pur.Effective_Start_Date AND Pur.Effective_End_Date
+      AND TRUNC (SYSDATE) BETWEEN Pci.Effective_Start_Date AND Pci.Effective_End_Date
+      AND TRUNC (SYSDATE) BETWEEN papf1.Effective_Start_Date AND papf1.Effective_End_Date
+  ) cc 
+  Commented For SR 253416  END */
+  -- Added For SR 253416  START
+            (
+                SELECT
+                    pci.value
+                FROM
+                    apps.pay_user_tables               put,
+                    apps.pay_user_rows_f               pur,
+                    apps.pay_user_columns              puc,
+                    apps.pay_user_column_instances_f   pci
+                WHERE
+                    put.user_table_id = puc.user_table_id
+                    AND put.user_table_id = pur.user_table_id
+                    AND upper(put.user_table_name) = 'XXOA_EMP_CONT_EXP_RENEWAL_ALERT'
+                    AND upper(pur.row_low_range_or_name) LIKE upper('Email Address')
+                    AND pur.user_row_id = pci.user_row_id
+                    AND puc.user_column_id = pci.user_column_id
+                    AND puc.user_column_name = ppf.payroll_name
+                    AND trunc(sysdate) BETWEEN pur.effective_start_date AND pur.effective_end_date
+                    AND trunc(sysdate) BETWEEN pci.effective_start_date AND pci.effective_end_date
+            ) cc
+  -- Added For SR 253416  END
+            ,
+            nvl((
+                SELECT
+                    pci.value
+                FROM
+                    apps.pay_user_tables               put, apps.pay_user_rows_f               pur, apps.pay_user_columns              puc, apps.pay_user_column_instances_f   pci
+                WHERE
+                    put.user_table_id = puc.user_table_id
+                    AND put.user_table_id = pur.user_table_id
+                    AND upper(put.user_table_name) = 'XXOA_EMP_CONT_EXP_RENEWAL_ALERT'
+                    AND upper(pur.row_low_range_or_name) = upper('Send Alert')
+                    AND pur.user_row_id = pci.user_row_id
+                    AND puc.user_column_id = pci.user_column_id
+                    AND puc.user_column_name = ppf.payroll_name
+                    AND trunc(sysdate) BETWEEN pur.effective_start_date AND pur.effective_end_date
+                    AND trunc(sysdate) BETWEEN pci.effective_start_date AND pci.effective_end_date
+            ), 'No') send_y_n,
+            ppf.payroll_name
+  --- Added For SR 199175  END
+        FROM
+            apps.per_all_people_f         papf,
+            apps.per_all_assignments_f    paaf,
+            apps.per_person_analyses      ppa,
+            apps.per_analysis_criteria    paa,
+            apps.fnd_id_flex_structures   fifs,
+  -- Added For SR 181262  START
+            apps.per_jobs                 pj,
+            apps.hr_all_positions_f       hap,
+            (
+                SELECT
+                    hap1.position_id,
+                    hap1.name position_name,
+                    substr(hap1.name, 1, 24) evp_position_name,
+                    substr(hap1.name, 1, 21) svp_position_name
+                FROM
+                    apps.hr_all_positions_f hap1
+                WHERE
+                    1 = 1
+                    AND trunc(sysdate) BETWEEN hap1.effective_start_date AND hap1.effective_end_date
+            ) tb,
+            apps.pay_people_groups        ppg,
+            apps.pay_all_payrolls_f       ppf
+        WHERE
+            1 = 1
+            AND paaf.job_id = pj.job_id (+)
+            AND paaf.position_id = hap.position_id (+)
+            AND paaf.position_id = tb.position_id (+)
+			/***Commented as requested by Hiba on 15-JUL-2025*****/
+           /* AND upper(pj.name) NOT IN ( 
+                'GM',
+                'VP',
+                'CEO',
+                'CHIEF OFFICER'
+            )*/
+            AND upper(tb.svp_position_name) != 'SENIOR VICE PRESIDENT'
+            AND upper(tb.evp_position_name) != 'EXECUTIVE VICE PRESIDENT'
+            AND trunc(sysdate) BETWEEN hap.effective_start_date AND hap.effective_end_date
+            AND ppg.people_group_id = paaf.people_group_id
+            AND ppg.segment3 = 'OMAN'
+            AND papf.attribute18 = 'No'
+            AND papf.person_id = paaf.person_id
+            AND papf.person_id = ppa.person_id
+            AND ppa.analysis_criteria_id = paa.analysis_criteria_id
+            AND ppa.id_flex_num = fifs.id_flex_num
+            AND paaf.payroll_id = ppf.payroll_id
+            AND trunc(sysdate) BETWEEN papf.effective_start_date AND papf.effective_end_date
+            AND trunc(sysdate) BETWEEN paaf.effective_start_date AND paaf.effective_end_date
+            AND trunc(sysdate) BETWEEN ppf.effective_start_date AND ppf.effective_end_date
+            AND papf.current_employee_flag = 'Y'
+            AND paaf.assignment_type = 'E'
+            AND paaf.primary_flag = 'Y'
+            AND fifs.id_flex_structure_code = 'OA_EMP_CONTRACT_RENEWAL'
+            AND paa.segment3 IS NOT NULL
+-- Added For SR 181262 END
+            AND decode(id_flex_structure_code, 'OA_EMP_CONTRACT_RENEWAL', fnd_date.canonical_to_date(paa.segment3)) = trunc(sysdate
+            + 120)
+    )
+WHERE
+    send_y_n = 'Yes' -- Added for SR 199175
