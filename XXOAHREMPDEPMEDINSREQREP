@@ -1,0 +1,239 @@
+<dataTemplate name="XXOAHREMPDEPMEDINSREQREP" version="1.0">
+  <properties>
+    <property name="xml_tag_case" value="UPPER"/>
+    <property name="debug_mode" value="ON"/>
+  </properties>
+  <parameters>
+      <parameter name="P_EMP_NO" dataType="VARCHAR2"/>
+	  <parameter name="P_PAYROLL_NAME" dataType="VARCHAR2"/>
+      <parameter name="P_EFFECTIVE_YEAR" dataType="VARCHAR2"/>
+  </parameters>
+  
+  <dataQuery>
+    <sqlStatement name="Q_MAIN4">
+<![CDATA[
+select :P_EFFECTIVE_YEAR  EFFECTIVE_YEAR,
+         (select payroll_name from apps.pay_payrolls_f where payroll_id = :p_payroll_name 
+         and rownum = 1) as PY_NAME,
+    (select Employee_number from per_all_people_f where person_id = :p_emp_no and trunc(sysdate) between effective_start_date and effective_end_date 
+     and rownum = 1) as PEMP_NO
+	   from dual
+]]>
+</sqlStatement>  
+
+    <sqlStatement name="Q_MAIN">
+      <![CDATA[
+SELECT
+    *
+FROM
+    (
+        SELECT
+            xxoa_med_ins_amt_fnc(maternity_coverage_flag, yr_start_date, :p_effective_year, date_end) amt,
+            main_qry.*
+        FROM
+            (
+                SELECT
+                    papf.employee_number                      emp_number,
+                    papf.full_name,
+                    (
+                        SELECT
+                            name
+                        FROM
+                            per_grades
+                        WHERE
+                            grade_id = paaf.grade_id
+                    )                                         grade,
+                    xxoa_hr.get_parent_org(
+                        fnd_profile.value('PER_BUSINESS_GROUP_ID'),
+                        paaf.organization_id,
+                        'SBU',
+                        'NAME'
+                    )                                         sbu,
+                    xxoa_hr.get_parent_org(
+                        fnd_profile.value('PER_BUSINESS_GROUP_ID'),
+                        paaf.organization_id,
+                        'DEPT',
+                        'NAME'
+                    )                                         department,
+                    xxoa_hr.get_parent_org(
+                        fnd_profile.value('PER_BUSINESS_GROUP_ID'),
+                        paaf.organization_id,
+                        'SE',
+                        'NAME'
+                    )                                         section,
+                    ppf.payroll_name                          payroll,
+                    (
+                        SELECT DISTINCT --Added for SR#434237
+                            papf1.full_name
+                        FROM
+                            per_contact_relationships pcr,
+                            per_all_people_f          papf1,
+                            hr_lookups                hl
+                        WHERE
+                                1 = 1
+                            AND pcr.contact_person_id = papf1.person_id
+                            AND pcr.person_id = papf.person_id
+                            AND papf1.person_id = segment1
+                            AND papf1.business_group_id = pcr.business_group_id
+                            AND hl.lookup_type = 'CONTACT'
+                            AND hl.lookup_code = pcr.contact_type
+                            AND hl.enabled_flag = 'Y'
+                            AND trunc(sysdate) BETWEEN papf1.effective_start_date AND papf1.effective_end_date
+                    )                                         "DEPENDENT_NAME",
+                    hl.meaning                                "RELATIONSHIP_TYPE",
+                    segment3                                  maternity_coverage_flag,
+                    decode(segment3, 'Y', 'Yes', 'No')        "MATERNITY_COVERAGE",
+                    decode(segment4, 'Y', 'Yes', 'No')        "DENTAL_COVERAGE",
+                    decode(segment5, 'Y', 'Yes', 'No')        "OPTICAL_COVERAGE",
+                    h2.meaning                                "SCAN_DOCS_ATTACHED",
+                    segment7                                  "PLEASE_NOTE",
+                    to_char(TO_DATE(segment8), 'DD-Mon-RRRR') "DATE_OF_APPLICATION",
+                    segment9                                  "COMMENTS",
+                    to_char(ppa.date_from, 'DD-Mon-RRRR')     date_from,
+                    k.yr_inf,
+                    CASE
+                        WHEN TO_DATE('01-Jan-' || k.yr_inf) < ppa.date_from THEN
+                            ppa.date_from
+                        ELSE
+                            TO_DATE('01-Jan-' || k.yr_inf)
+                    END                                       AS yr_start_date,
+               --Rank_noa, 
+                    (
+                        SELECT
+                            date_from - 1
+                        FROM
+                            (
+                                SELECT
+                                    RANK()
+                                    OVER(
+                                        ORDER BY
+                                            date_from
+                                    ) AS rank_no,
+                                    date_from,
+                                    person_analysis_id
+                                FROM
+                                    per_person_analyses    ppa,
+                                    per_analysis_criteria  pac,
+                                    fnd_id_flex_structures fifs
+                                WHERE
+                                        1 = 1
+                         -- and ppa.person_id =480092
+                                    AND ppa.analysis_criteria_id = pac.analysis_criteria_id
+                                    AND pac.id_flex_num = fifs.id_flex_num
+                                    AND segment1 = pac.segment1
+                                    AND fifs.id_flex_structure_code = 'OA_MEDICAL_INSURANCE_REQ'
+                            )
+                        WHERE
+                            rank_no = rank_noa + 1
+                    )                                         date_end
+                FROM
+                    per_all_people_f       papf,
+                    per_person_analyses    ppa,
+                    per_analysis_criteria  pac,
+                    fnd_id_flex_structures fifs,
+                    per_all_assignments_f  paaf,
+                    hr_lookups             h2,
+                    hr_lookups             hl,
+                    pay_payrolls_f         ppf,
+                    (
+                        SELECT DISTINCT
+                            ( to_char(ptp.start_date, 'RRRR') ) yr_inf
+                        FROM
+                            per_time_periods ptp
+                        WHERE
+                                1 = 1
+                            AND payroll_id in (65,67) --Added for SR#434237
+                    )                      k,
+                    (
+                        SELECT
+                            RANK()
+                            OVER(
+                                ORDER BY
+                                    date_from
+                            ) AS rank_noa,
+                            date_from,
+                            person_analysis_id
+                        FROM
+                            per_person_analyses    ppa,
+                            per_analysis_criteria  pac,
+                            fnd_id_flex_structures fifs
+                        WHERE
+                                1 = 1
+                         -- and ppa.person_id =480092
+                            AND ppa.analysis_criteria_id = pac.analysis_criteria_id
+                            AND pac.id_flex_num = fifs.id_flex_num
+                            AND segment1 = pac.segment1
+                            AND fifs.id_flex_structure_code = 'OA_MEDICAL_INSURANCE_REQ'
+                    )                      rk_det
+                WHERE
+                        papf.person_id = ppa.person_id
+                    AND rk_det.person_analysis_id = ppa.person_analysis_id
+                    AND papf.person_id = nvl(:p_emp_no, papf.person_id)
+                    AND ppf.payroll_id = paaf.payroll_id
+                    AND ppf.payroll_id = :p_payroll_name
+                    AND h2.lookup_type = 'XXOA_MEDICAL_INSURANCE_DOCS'
+                    AND h2.lookup_code = segment6
+                    AND h2.enabled_flag = 'Y'
+                    AND hl.lookup_type = 'CONTACT'
+                    AND hl.lookup_code = segment2
+                    AND hl.enabled_flag = 'Y'
+                    AND paaf.primary_flag = 'Y'
+                    AND paaf.person_id = papf.person_id
+                    AND ppa.analysis_criteria_id = pac.analysis_criteria_id
+                    AND pac.id_flex_num = fifs.id_flex_num
+        --and segment1='482097'
+                    AND TO_NUMBER(k.yr_inf) BETWEEN TO_NUMBER(to_char(ppa.date_from, 'RRRR')) AND TO_NUMBER(:p_effective_year)
+                    AND trunc(ppa.creation_date) BETWEEN papf.effective_start_date AND papf.effective_end_date
+                    AND trunc(sysdate) BETWEEN paaf.effective_start_date AND paaf.effective_end_date
+                    AND trunc(sysdate) BETWEEN ppf.effective_start_date AND ppf.effective_end_date
+                    AND fifs.id_flex_structure_code = 'OA_MEDICAL_INSURANCE_REQ'
+            ) main_qry
+    )
+WHERE
+    TO_NUMBER(to_char(yr_start_date, 'RRRR')) <= TO_NUMBER(to_char(
+        nvl(date_end, '31-Dec-4712'),
+        'RRRR'
+    ))
+ORDER BY
+    emp_number,
+    dependent_name,
+    yr_start_date,
+    yr_inf;
+      ]]>
+	  
+    </sqlStatement>
+  </dataQuery>
+  <dataStructure>
+  
+  	<group name="G_MAIN4" source="Q_MAIN4">
+      <element name="PY_NAME"          datatype="VARCHAR2" value="PY_NAME"/>
+      <element name="PEMP_NO"      datatype="VARCHAR2"    value="PEMP_NO"/>
+      <element name="EFFECTIVE_YEAR" datatype="VARCHAR2"     value="EFFECTIVE_YEAR"/>
+    </group>
+	
+    <group name="G_MAIN" source="Q_MAIN">
+	  <element name="EMP_NUMBER"     datatype="VARCHAR2" value="EMP_NUMBER"/>
+      <element name="FULL_NAME"           datatype="VARCHAR2" value="FULL_NAME"/>
+      <element name="GRADE"               datatype="VARCHAR2" value="GRADE"/>
+      <element name="SBU"                 datatype="VARCHAR2" value="SBU"/>
+      <element name="DEPARTMENT"          datatype="VARCHAR2" value="DEPARTMENT"/>
+      <element name="SECTION"             datatype="VARCHAR2" value="SECTION"/>
+      <element name="PAYROLL"             datatype="VARCHAR2" value="PAYROLL"/>
+      <element name="DEPENDENT_NAME"      datatype="VARCHAR2" value="DEPENDENT_NAME"/>
+      <element name="RELATIONSHIP_TYPE"   datatype="VARCHAR2" value="RELATIONSHIP_TYPE"/>
+      <element name="MATERNITY_COVERAGE"  datatype="VARCHAR2" value="MATERNITY_COVERAGE"/>
+      <element name="DENTAL_COVERAGE"     datatype="VARCHAR2" value="DENTAL_COVERAGE"/>
+      <element name="OPTICAL_COVERAGE"    datatype="VARCHAR2" value="OPTICAL_COVERAGE"/>
+      <element name="SCAN_DOCS_ATTACHED"  datatype="VARCHAR2" value="SCAN_DOCS_ATTACHED"/>
+      <element name="PLEASE_NOTE"         datatype="VARCHAR2" value="PLEASE_NOTE"/>
+      <element name="DATE_OF_APPLICATION" datatype="DATE"     value="DATE_OF_APPLICATION"/>
+      <element name="COMMENTS"            datatype="VARCHAR2" value="COMMENTS"/>
+	  <element name="INS_STR_DATE"        datatype="VARCHAR2" value="INS_STR_DATE"/>
+	  <element name="INS_EXP_DATE"        datatype="VARCHAR2" value="INS_EXP_DATE"/>
+	  <element name="SIT_DATE_FROM"       datatype="VARCHAR2" value="SIT_DATE_FROM"/>
+	   <element name="SIT_DATE_TO"        datatype="VARCHAR2" value="SIT_DATE_TO"/>
+	  <element name="YR_INF"              datatype="VARCHAR2" value="YR_INF"/>
+	  <element name="AMT"                 datatype="Number" value="AMT"/>
+    </group>
+  </dataStructure>
+</dataTemplate>
