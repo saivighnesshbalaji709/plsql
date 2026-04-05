@@ -1,0 +1,144 @@
+SQL
+
+Why SQL?
+
+a Coaching centre so, Imagine. that I'm roming Basically, I nud to maintain data like
+
+Student details Name, email, contad no, Batch, DOJ
+
+Fee details Name, email, Date of payment, amount. due
+
+Attendance details, Name, attendance, Batch, email
+
+So, For storing all these data, I may nud a software, that can help me the data-insert, update, delete
+
+But for that, we do have something like Excel Right? Then Why SQL?
+
+(2) Why not Excel?
+
+1 Not Scalable.
+
+2) Concurrent accussing of data can cause inconsistencies.
+
+3) Security concerns & reliability.
+
+4) Complex problems cannot be solved wat time.
+
+5) Data check, uniqueness.
+
+So, for overcomoming thise issues, we use SQL.
+
+2) What is sot?
+
+→ A Language to communicate with databases Is SQL a programming Language 7. Yes!! SQL is a 'Declarative programming Language
+
+Note: Programming Languages are classified into 2 types
+
+Declarative.
+
+2) Imperative
+
+Declarative: No formal set of steps of Procedures used.
+
+Imperative proper flow of Execution 2 procedwus are followed.
+
+Ex: Conditional statements, Loops.
+
+3) SQL (1) SEQUEL ?
+
+→ Initially it was Structured English Query Language' Language (SQL). Later, it was senamed Structured Qury
+
+→ So it can be called as both SQL / SEQUEL.
+
+DataBase
+
+→Database is a Collection of data:
+
+stored in a structured order
+
+2) Can be searched officiently multiple rivers
+
+3) can be shaud among Concurrently.
+
+In a database, the data is being stored in the form of tables (Rows. columne).
+
+How data is stored ?
+
+1) Data is stored in base pages/ blocks in a dala
+
+(Ex: If I'm storing 1000 Sous are a data of 10,000 lows, 1 page, next 1000 Stored in are stored in another page).
+
+2) Basically, Our db's SSD are Stored in our HDD/
+
+3) Frequently accessed pages are stored in cache memory of RAM
+
+(4) Block: Smallest Individual Unit of data, transferred from SSD to RAM memory.
+
+Types
+
+Relational DB
+
+2) NO SQL DB
+
+Relational DB
+
+→ Here the data will have some kind of relation /related records bin them
+
+→Organised data
+
+Ex: Refer student case.
+
+→ common coxamples are MySQL, Postgres, Oracle
+
+NOSQL
+
+→ Here, the data may / may not be related (Standalone data is stored).
+
+No organized format
+
+Ex: JSON, key-value pairs ( MongoDB), Graphs
+
+Table
+
+- collection of Rows & columns.
+
+Ex
+
+Name
+
+Age
+
+email
+
+Sai
+
+22
+
+Sai @gmail.com
+
+row's (Records)
+
+Varun
+
+23
+
+Varun@gmail. com
+
+columns (fields)
+
+Ensider student example.
+
+) Student details
+
+2) Fees
+
+3) Attendance
+
+Can be stored as 3 different tables in the Same database.
+
+مواعيد
+
+→ Here, all these tables record 'email'. are linked by the common record email.
+
+
+
