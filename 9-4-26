@@ -1,0 +1,110 @@
+SELECT ASG_ROW_ID,
+       SURNAME,
+       SECOND_NAME,
+       HIRE_DATE,
+       EMPLOYEE_NUMBER,
+       FULL_NAME,
+       first_name,
+       location_code,
+       job,
+       org,
+       Department,
+       section,
+       POSITION,
+       SUP,
+       LINE_MANAGER,
+       PHONE_NUMBER        
+INTO &ASG_ROW_ID,
+     &SURNAME,
+     &SECOND_NAME,
+     &HIRE_DATE,
+     &EMPLOYEE_NUMBER,
+     &FULL_NAME,
+     &FIRST_NAME,
+     &LOCATION_CODE,
+     &JOB,
+     &ORG,
+     &DEPARTMENT,
+     &SECTION,
+     &POSITION,
+     &SUP,
+     &LINE_MANAGER,
+     &PHONE_NUMBER       
+  FROM
+(SELECT  ROWIDTOCHAR(PAAF.ROWID) ASG_ROW_ID,
+         PAPF.last_name SURNAME,
+         PAPF.SUFFIX SECOND_NAME,
+         PPOS.date_start HIRE_DATE,
+         PAPF.employee_number EMPLOYEE_NUMBER,
+         PAPF.FULL_NAME,
+         PAPF.first_name,
+         APPS.hr_general.decode_location (paaf.location_id) location_code,
+         APPS.hr_general.decode_job (paaf.job_id) job,
+         APPS.hr_general.decode_organization (paaf.organization_id) org,
+         xxoa_hr.get_parent_org (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paaf.organization_id,'DEPT','NAME') department,
+         xxoa_hr.get_parent_org (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),paaf.organization_id,'SE','NAME') section,
+         POS.name POSITION,
+         (SELECT SUP.employee_number
+            FROM APPS.per_all_people_f SUP
+           WHERE SUP.person_id = PAAF.supervisor_id
+             AND TRUNC (PAAF.effective_start_date) BETWEEN SUP.effective_start_date AND SUP.effective_end_date
+                 AND ROWNUM < 2
+          ) SUP,
+         (SELECT SUP.employee_number
+            FROM APPS.per_all_people_f SUP
+           WHERE SUP.person_id = TO_NUMBER (PAAF.ass_attribute8)
+             AND TRUNC (PAAF.effective_start_date) BETWEEN SUP.effective_start_date AND SUP.effective_end_date
+                 AND ROWNUM < 2
+          ) LINE_MANAGER,
+         (SELECT PH.phone_number
+            FROM per_phones PH
+           WHERE PH.parent_id = PAPF.person_id
+             AND PH.phone_type = 'M'
+             AND PH.parent_table = 'PER_ALL_PEOPLE_F'
+             AND ROWNUM < 2
+          ) PHONE_NUMBER
+    FROM per_all_assignments_f  PAAF,
+         per_all_people_f       PAPF,
+         per_periods_of_service PPOS,
+         hr_all_positions_f     POS,
+		 apps.fnd_lookup_values_vl flv,
+         per_grades pg
+   WHERE PAAF.person_id             = PAPF.person_id
+   AND paaf.grade_id = pg.grade_id 
+     AND PAAF.period_of_service_id  = PPOS.period_of_service_id
+     AND PAAF.position_id           = POS.position_id
+     AND TRUNC (PAAF.EFFECTIVE_START_DATE) BETWEEN POS.effective_start_date  AND POS.effective_end_date
+     AND TRUNC (PAAF.EFFECTIVE_START_DATE) BETWEEN PAPF.effective_start_date AND PAPF.effective_end_date
+      AND TRUNC (PAAF.EFFECTIVE_START_DATE) BETWEEN pg.date_from  AND nvl(pg.date_to,to_date('31-Dec-4712'))
+     AND PAPF.current_employee_flag = 'Y'
+     AND PAAF.primary_flag          = 'Y'
+    AND PAAF.assignment_type       = 'E'
+     AND EXISTS (select count(assignment_id) 
+                   from per_all_assignments_f 
+                where assignment_id = PAAF.assignment_id
+                 having count(assignment_id) = 1
+                 )                       
+     AND EXISTS (select count(person_id) 
+                   from per_all_people_f 
+                  where person_id = PAPF.person_id
+                 having count(person_id) = 1
+                 )
+     AND papf.employee_number not in ('60576')
+   --  AND PAAF.rowid = :ROWID 
+    AND flv.lookup_type = 'XXOA_NEW_JOINER_TYPE'
+	 AND flv.enabled_flag  ='Y'
+    AND pg.name = flv.meaning 
+   --AND flv.meaning in ('OM15','OM16')	
+   AND(Select TRUNC(MAX(a.CREATION_DATE)) from per_all_assignments_f a 
+				where a.assignment_number= paaf.assignment_number 
+                AND a.VACANCY_ID IS NULL
+                 )  = TRUNC(SYSDATE-1)
+)
+WHERE first_name      is not null
+  AND hire_date       is not null
+  AND department      is not null
+  --AND section         is not null
+  AND position        is not null
+  AND sup             is not null
+  AND line_manager    is not null
+  AND location_code   is not null;
