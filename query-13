@@ -1,0 +1,119 @@
+create or replace FUNCTION      xxoa_total_ot_amount_fns (
+   p_payroll_id       IN   VARCHAR2,
+   p_from_period_id   IN   NUMBER,
+   p_to_period_id     IN   NUMBER,
+   p_person_id        IN   NUMBER,
+   p_payroll_action_id IN NUMBER
+)
+   RETURN NUMBER
+AS
+    /*
+   *****************************************************************************************************************************
+   Created By:    Sameer Patil (ACL)
+   Client    :    Oman Air
+   Creation Date: 04-Dec-2013
+ 
+   FUNCTION:      XXOA_TOTAL_OT_AMOUNT_FNS
+ 
+   Description:   This Function get total OT hours
+   ******************************************************************************************************************************
+   */
+--------------------------------------------------------------------------
+------------------------------------------------
+---------------------------------------------------------------------------
+   v_allowance   NUMBER := 0;
+   PRAGMA AUTONOMOUS_TRANSACTION;
+BEGIN
+--      DBMS_OUTPUT.put_line ('........Start......');
+--Get the basic salry for an employee
+   SELECT SUM (NVL (prv.result_value, 0)) amount
+     INTO v_allowance
+     FROM per_all_people_f papf1,
+          per_all_assignments_f paaf,
+          hr_all_organization_units hou1,
+          pay_assignment_actions pac,
+          pay_payroll_actions ppa,
+          pay_run_results prr,
+          pay_run_result_values prv,
+          pay_element_types_f et1,
+          pay_payrolls_f pay,
+          per_time_periods ptp,
+          pay_input_values_f piv,
+          pay_element_classifications pec
+    WHERE 1 = 1
+      AND papf1.person_id = paaf.person_id
+      AND paaf.organization_id = hou1.organization_id
+      AND paaf.assignment_id = pac.assignment_id
+      AND pac.assignment_action_id = prr.assignment_action_id
+      AND prv.run_result_id = prr.run_result_id
+      AND prr.element_type_id = et1.element_type_id
+      AND pay.payroll_id = ptp.payroll_id
+      AND ptp.payroll_id = ppa.payroll_id
+      AND papf1.current_employee_flag = 'Y'
+      AND paaf.primary_flag = 'Y'
+      AND piv.NAME = 'Pay Value'
+      AND prv.input_value_id = piv.input_value_id
+      AND ppa.action_type IN ('R', 'Q')
+      AND ppa.payroll_action_id = pac.payroll_action_id
+     -- AND ppa.date_earned BETWEEN ptp.start_date AND ptp.end_date
+      AND ptp.end_date BETWEEN papf1.effective_start_date
+                           AND papf1.effective_end_date
+      AND ptp.end_date BETWEEN paaf.effective_start_date
+                           AND paaf.effective_end_date
+      AND ptp.start_date BETWEEN et1.effective_start_date
+                             AND et1.effective_end_date
+      AND ptp.start_date BETWEEN piv.effective_start_date
+                             AND piv.effective_end_date
+      AND pay.payroll_id = p_payroll_id
+      AND ptp.time_period_id BETWEEN p_from_period_id AND p_to_period_id
+      AND et1.classification_id = pec.classification_id
+      AND ppa.payroll_action_id = p_payroll_action_id
+      AND et1.element_name IN
+             ('Overtime Payment',
+              --'Holiday Payment',
+              'Night Payment',
+              'Special Overtime Payment',
+              'Weekoff Payment',
+              'Holiday Overtime Payment',
+              'Overtime Arrear Payment'
+             )
+      AND papf1.person_id = p_person_id
+                                       --GROUP BY et1.element_name
+   ;
+ 
+   /*  to get the OTL Overtime Paymen*/
+   RETURN v_allowance;
+/* exception section*/
+EXCEPTION
+   WHEN NO_DATA_FOUND
+   THEN
+      RETURN 0;
+   WHEN TOO_MANY_ROWS
+   THEN
+      RETURN 0;
+   WHEN OTHERS
+   THEN
+      RETURN 0; my query: select papf.employee_number,papf.full_name,
+       round(xxoa_absence_duration.get_leave_ent(paaf.assignment_id,'Annual Leave Balance',:p_date),3) Annual_Leave_Balance,
+       round(xxoa_absence_duration.get_leave_ent(paaf.assignment_id,'Sick Leave Bank Plan',:p_date),3) Sick_Leave_Bank_Balance,
+       CASE
+       WHEN
+       round(xxoa_absence_duration.get_leave_ent(paaf.assignment_id,'Off in Lieu Bank Balance',:p_date),3) = -9999999
+       THEN 0
+       ELSE
+       round(xxoa_absence_duration.get_leave_ent(paaf.assignment_id,'Off in Lieu Bank Balance',:p_date),3)
+       END AS Off_in_Lieu_Bank_Balance
+from
+per_all_people_f papf,
+per_all_assignments_f paaf
+--(select :p_date p_date from dual) xx
+where 
+    papf.person_id = paaf.person_id
+AND paaf.primary_flag = 'Y'
+AND papf.CURRENT_EMPLOYEE_FLAG = 'Y'   
+and trunc(sysdate) between papf.effective_start_date and papf.effective_end_date
+and trunc(sysdate) between paaf.effective_start_date and paaf.effective_end_date
+and paaf.payroll_id in (65,67)
+and papf.employee_number = :emp_no
+and paaf.vacancy_id is null
+END xxoa_total_ot_amount_fns;
