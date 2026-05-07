@@ -1,0 +1,171 @@
+xxoa_recalc_annual_leave - BACKUP SPIN01
+
+create or replace PROCEDURE      xxoa_recalc_annual_leave (
+      errbuf                OUT NOCOPY      VARCHAR2,
+      retcode               OUT NOCOPY      NUMBER,
+      p_business_group_id   IN              NUMBER,
+      p_date                IN              VARCHAR2,
+      pp_validate           IN              VARCHAR2
+   )
+   AS
+      l_date                        DATE;
+      l_days                        NUMBER;
+      l_validate                    BOOLEAN        := FALSE;
+      l_o_absence_days              NUMBER;
+      l_absence_days                NUMBER;
+      l_absence_hours               NUMBER;
+      l_object_version_number       NUMBER;
+      l_dur_dys_less_warning        BOOLEAN;
+      l_dur_hrs_less_warning        BOOLEAN;
+      l_exceeds_pto_entit_warning   BOOLEAN;
+      l_exceeds_run_total_warning   BOOLEAN;
+      l_abs_overlap_warning         BOOLEAN;
+      l_abs_day_after_warning       BOOLEAN;
+      l_dur_overwritten_warning     BOOLEAN;
+      l_del_element_entry_warning   BOOLEAN;
+      l_abs_information_category    VARCHAR2 (200);
+      l_abs_information1            VARCHAR2 (200);
+      l_error                       VARCHAR2 (200);
+
+      CURSOR csr_abs (p_date IN DATE)
+      IS
+         SELECT a.absence_attendance_id, a.absence_attendance_type_id,
+                a.date_notification, a.date_start, a.date_end,
+                a.object_version_number, a.absence_days, a.absence_hours,
+                b.full_name, b.employee_number
+           FROM per_absence_attendances a,
+                per_all_people_f b,
+                per_all_assignments_f c,
+                pay_people_groups d,
+                hr_all_organization_units hou ---added for 318887
+          WHERE a.person_id = b.person_id
+            AND b.person_id = c.person_id
+            AND c.primary_flag = 'Y'
+            AND d.segment1 = 'NFLY' -- Added for SR 209486
+            AND d.segment2= 'RE'---added for 318887
+            AND c.organization_id= hou.organization_id ---added for 318887
+            AND c.people_group_id = d.people_group_id(+)
+            AND (p_date BETWEEN c.effective_start_date AND c.effective_end_date
+                )
+            AND (p_date BETWEEN b.effective_start_date AND b.effective_end_date
+                )
+            AND (p_date BETWEEN date_start AND date_end)
+          /* Commented For SR 266168 :: START
+		   AND UPPER
+                  (xxoa_absence_duration.get_absence_name
+                                                (a.absence_attendance_type_id)
+                 ) IN ('ANNUAL LEAVE', 'XXXX LEAVE','LEAVE BANK'); -- added By Sameer Patil(ACL) For leave bank holiday adjustment;
+				 Commented For SR 266168 :: END */
+			AND UPPER
+                  (xxoa_absence_duration.get_absence_name
+                                                (a.absence_attendance_type_id)
+                 ) IN ('ANNUAL LEAVE','ANNUAL LEAVE BAH','ANNUAL LEAVE KSA','ANNUAL LEAVE KWT','ANNUAL LEAVE QTR','ANNUAL LEAVE UAE','XXXX LEAVE') --Added ANNUAL LEAVE BAH,KSA,KWT,QTR,UAE for SR#437566
+				 ----Added For SR 266168
+                 ----Start of added for 318887
+                 and upper(hou.name)  not in (
+                 select upper(meaning) from    apps.fnd_lookup_values_vl flv
+where 1=1 AND flv.lookup_type      = 'XXOA_DESERT_OPS_ELIGIBILITY'
+ AND flv.enabled_flag='Y'
+ AND p_date between flv.start_date_active and nvl(flv.end_date_active,'31-DEC-4712'));
+  ----End of added for 318887
+
+   BEGIN
+      IF UPPER (pp_validate) = 'N'
+      THEN
+         l_validate := TRUE;
+      ELSE
+         l_validate := FALSE;
+      END IF;
+
+      l_date := fnd_date.canonical_to_date (p_date);
+      fnd_file.put_line (fnd_file.output,
+                         '<center><h2>Absence Adjustments</h2><center>'
+                        );
+      fnd_file.put_line
+         (fnd_file.output,
+          '<table width=75% style="font-family:Arial;font-size:9pt;border-collapse:collapse" cellpadding="5" cellspacing="0" border="0">'
+         );
+      fnd_file.put_line
+         (fnd_file.output,
+          '<tr style="border:1pt solid black;background:silver"><td>Number</td><td>Name</td><td>Start Date</td><td>End Date</td>
+           <td>New Days</td><td>Old Days</td><td>Absence Type</td><td>Remarks</td></tr>'
+         );
+
+      FOR rec_abs IN csr_abs (l_date)
+      LOOP
+         l_object_version_number := rec_abs.object_version_number;
+         l_o_absence_days := rec_abs.absence_days;
+         l_absence_days := NULL;
+         l_absence_hours := NULL;
+         /*Start SR 209486- To skip absence validations for recalculation through bg_absence_duration formula*/
+         l_abs_information_category := 'OM';
+         l_abs_information1 := 'Y';
+         /*End of Changes SR 209486 - To skip absence validations for recalculation*/
+         l_error := NULL;
+
+         BEGIN
+            hr_person_absence_api.update_person_absence
+                 (p_validate                       => l_validate,
+                  p_effective_date                 => rec_abs.date_notification,
+                  p_absence_attendance_id          => rec_abs.absence_attendance_id,
+                  p_date_start                     => rec_abs.date_start,
+                  p_date_end                       => rec_abs.date_end,
+                  p_absence_days                   => l_absence_days,
+                  p_absence_hours                  => l_absence_hours,
+                  p_object_version_number          => l_object_version_number,
+                  p_dur_dys_less_warning           => l_dur_dys_less_warning,
+                  p_dur_hrs_less_warning           => l_dur_hrs_less_warning,
+                  p_exceeds_pto_entit_warning      => l_exceeds_pto_entit_warning,
+                  p_exceeds_run_total_warning      => l_exceeds_run_total_warning,
+                  p_abs_overlap_warning            => l_abs_overlap_warning,
+                  p_abs_day_after_warning          => l_abs_day_after_warning,
+                  p_dur_overwritten_warning        => l_dur_overwritten_warning,
+                  p_del_element_entry_warning      => l_del_element_entry_warning,
+                  p_abs_information_category       => l_abs_information_category, -- Added for SR 209486
+                  p_abs_information1               => l_abs_information1 -- Added for SR 209486
+                 );
+
+           DBMS_OUTPUT.PUT_LINE ( 'l_o_absence_days = ' || l_o_absence_days );
+
+         EXCEPTION
+            WHEN OTHERS
+            THEN
+               l_error := SQLERRM;
+               NULL;
+         END;
+
+         fnd_file.put_line
+            (fnd_file.output,
+                '<tr style="border:1pt solid black;"><td>'
+             || rec_abs.employee_number
+             || '</td><td>'
+             || rec_abs.full_name
+             || '</td><td align=center>'
+             || rec_abs.date_start
+             || '</td><td align=center>'
+             || rec_abs.date_end
+             || '</td><td align=right>'
+             || l_absence_days
+             || '</td><td align=right>'
+             || l_o_absence_days
+             || '</td><td>'
+             || xxoa_absence_duration.get_absence_name
+                                           (rec_abs.absence_attendance_type_id)
+             || '</td><td>'
+             || SUBSTR (l_error, 12)
+             || '</td></tr>'
+            );
+      END LOOP;
+
+      fnd_file.put_line (fnd_file.output, '</table>');
+      errbuf := NULL;
+      retcode := 0;
+      COMMIT;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         fnd_file.put_line (fnd_file.LOG, SQLERRM);
+         NULL;
+--         errbuf := SQLERRM;
+--         retcode := 1;
+   END;
