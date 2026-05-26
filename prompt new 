@@ -1,0 +1,142 @@
+give a best prompt.  role based access. i need it like a role based access, like the respective pages should be shown to respective users. first page should be login, in which user can choose role and login with their own credentials. also, make it a bit colourful and visually apealing. dark/light mode option should be there. for real time analytics, im thinking of integrating with powerbi. more animations. use only the mentioned tech stack. Also use agents as mentioned.
+
+Use this as your master prompt for Lovable/Bolt/New:
+
+Build a full-stack web application called **Maverick Talent Insights / TalentPulse** for training analytics, competency tracking, and AI-driven talent management. The app must be visually appealing, colorful, modern, and polished, with subtle animations, smooth transitions, responsive layouts, and a built-in **dark/light mode toggle**. Use **only** the tech stack listed below and implement the full role-based experience described here [1].
+
+## Tech stack
+- **Frontend:** Angular, TypeScript, HTML, CSS, JavaScript [1]
+- **Backend:** FastAPI, Python [1]
+- **Data/ORM:** SQLAlchemy, Pandas [1]
+- **Auth:** JWT [1]
+- **Database:** SQLite for local development, PostgreSQL-ready structure, optional Firebase support [1]
+- **Exports:** OpenPyXL, PDF export support [1]
+- **AI/Cloud:** Microsoft Azure, Claude, Gemini API, GPT-4 [1]
+- **Other tools:** Figma-style UI, GitHub, PowerBI, Docker [1]
+
+## Product goal
+Replace manual Excel-based trainee tracking with a centralized, intelligent platform that provides one source of truth for trainee progress, assessment scores, competencies, risks, and deployment readiness. The system should help trainers, HR/LD teams, business stakeholders, and admins make faster decisions with real-time analytics and AI-powered insights [1].
+
+## Core requirement: role-based access
+The application must be built with strict **role-based access control**. After login, users should only see the pages and data permitted for their role. Use JWT authentication and permission guards on both frontend and backend [1].
+
+### Login flow
+- The **first page must be a login page**.
+- On the login page, the user first **chooses a role**.
+- Then the user logs in using their own credentials.
+- After successful login, redirect the user to their **respective dashboard** based on role.
+- Enforce that users cannot access unauthorized pages by entering URLs directly [1].
+
+### Roles and page visibility
+- **Trainer:** sees Trainer Dashboard, batch progress, trainee details, assessment performance, alerts, heatmaps, and intervention tools.
+- **LD/HR:** sees organization-wide insights, cross-batch trends, performance comparisons, and training effectiveness.
+- **Business Stakeholder:** sees high-level KPIs, deployment readiness, batch comparisons, and strategic views.
+- **Admin:** sees user management, access control, system health, tickets, alerts, and audit logs [1].
+
+## Pages to build
+Create these pages with role-based routing:
+1. Login / Role Selection
+2. Trainer Dashboard
+3. LD / HR Dashboard
+4. Business Stakeholder Dashboard
+5. Admin Dashboard
+6. Trainee Detail Page
+7. Batch Detail Page
+8. AI Insights Page
+9. Reports / Export Page
+10. User Management / System Settings Page [1]
+
+## Features to include
+### 1. Automated trainee lifecycle tracking
+Track trainees from onboarding to deployment readiness, including stage completion, scores, attempts, competency progress, and readiness status [1].
+
+### 2. Score aggregation and talent identification
+Automatically aggregate scores, classify top performers, average performers, and low performers, and highlight deserving trainees using performance trends and competency data [1].
+
+### 3. Real-time analytics
+Integrate **PowerBI** for live analytics dashboards and reporting views where appropriate. Make the UI look like a modern analytics workspace with cards, charts, tables, filters, and drilldowns [1].
+
+### 4. Exportable reports
+Allow exporting reports in **PDF and Excel** formats, including trainee summaries, batch reports, risk reports, readiness reports, and performance reports [1].
+
+### 5. AI / agent-based intelligence
+Use agents as part of the system design, with structured prompts, human-in-the-loop validation, and low-cost AI calls. Implement the following agent-driven capabilities [1]:
+- **Dropout Prediction Agent:** takes scores, attempts, and stage gaps; returns risk level (High / Medium / Low) plus reason.
+- **CPM Matching Agent:** takes skills, scores, and competency data; returns best-fit project recommendation plus justification.
+- **Performance Insight Agent:** takes trainee performance data; returns a concise summary of strengths, weaknesses, and suggestions.
+- Trigger AI only on new uploads or major updates, cache results, and use rule-based fallback for core calculations [1].
+
+### 6. Differentiators
+Include these standout features:
+- **Attempt heatmap** across assessment modules to show where trainees struggle batch-wise.
+- **Dropout risk alerts** for coordinators and trainers.
+- **Competency-to-project matching** recommendations.
+- **Cross-batch benchmarking** to compare batch performance and deployment readiness [1].
+
+## UI/UX direction
+Make the interface:
+- Bright, colorful, and professional.
+- Visually appealing with gradient accents, soft shadows, glassmorphism-style cards if suitable, and clean typography.
+- Supported by **dark mode and light mode**.
+- Animated, but not distracting: smooth page transitions, hover effects, animated KPI cards, subtle chart transitions, loading states, and toast notifications.
+- Responsive and enterprise-grade, suitable for desktop and tablet use.
+
+## Dashboard design
+Include:
+- KPI cards for completion rate, average score, risk count, top performers, deployment-ready count.
+- Role-specific side navigation.
+- Search, filters, sort, and drill-down tables.
+- Trend charts, comparison charts, competency visuals, and heatmaps.
+- Alert panels for low performers, dropout risk, and pending reviews.
+- Batch comparison views and readiness indicators [1].
+
+## Data model
+Design entities for:
+- Users
+- Roles
+- Trainees
+- Batches
+- Assessments
+- Attempts
+- Competencies
+- Scores
+- Alerts
+- AI insights
+- Export history
+- Project recommendations
+- Audit logs [1].
+
+## Business logic
+Implement:
+- Role-based access and route protection.
+- Automatic score aggregation.
+- Top/low performer detection.
+- Deployment readiness scoring.
+- Dropout risk detection with AI plus rule-based fallback.
+- Cross-batch benchmarking.
+- Human override for AI-based classifications.
+- Secure auth with JWT [1].
+
+## Excel upload
+Support standardized Excel upload with:
+- Validation of required fields.
+- Preview before import.
+- Error reporting for invalid rows.
+- Automatic ingestion into the database.
+- Recalculation of metrics after upload [1].
+
+## Agent architecture
+Design the backend so the AI features are handled by separate logical agents or service modules. Each agent should:
+- Receive structured data from the database.
+- Use concise prompts.
+- Return grounded, explainable outputs.
+- Be called only when needed.
+- Store cached responses for repeated queries [1].
+
+## Final build quality
+The final application should feel like a polished enterprise product, not a basic CRUD app. It should be fast, responsive, visually rich, and suitable for a designathon/demo presentation. Use the exact stack listed above, keep the system modular, and make role-based access the foundation of the whole app [1].
+
+If you want, I can also turn this into:
+1. a **shorter one-paragraph prompt**, or  
+2. a **super-detailed prompt with screen-by-screen UI instructions**.
+
