@@ -1,0 +1,154 @@
+so I'm gonna create a web application for the following idea. provide a prompt that I can use to develop this in tools like lovable, bolt new etc. use the same tech stack mentioned and include all features mentioned.
+
+Here’s a ready-to-paste **build prompt** for Lovable, Bolt, or similar app builders, based on your PDF and keeping the same tech stack and all listed features. The app is called **Maverick Talent Insights / TalentPulse** and should be built as a role-based training analytics platform with AI-driven insights, dashboards, and report exports [1].
+
+***
+
+## Prompt to use
+
+Build a full-stack web application called **Maverick Talent Insights (TalentPulse)** for centralized trainee tracking, assessment analytics, and AI-powered talent decisions. The problem to solve is that trainers, HR/LD teams, and business stakeholders currently manage trainee progress manually in Excel, causing fragmented data, delayed insights, missed low performers, and slow recognition of top talent [1].
+
+### Core objective
+Replace manual trainee tracking with a smart, automated dashboard that gives a single source of truth for trainee performance, competency growth, batch progress, deployment readiness, and AI-generated insights [1].
+
+### Tech stack
+Use the following tech stack exactly:
+- **Frontend:** Angular, TypeScript, HTML, CSS, JavaScript [1]
+- **Backend:** FastAPI, Python [1]
+- **ORM/Data handling:** SQLAlchemy, Pandas [1]
+- **Auth:** JWT [1]
+- **Database:** SQLite for development, PostgreSQL support for production, optional Firebase integration [1]
+- **Exports:** OpenPyXL for Excel, PDF export support [1]
+- **Cloud/AI:** Microsoft Azure, GenAI APIs including Claude, Gemini API, and GPT-4 [1]
+- **Other tools/integration-ready:** Figma-style UI, GitHub, PowerBI, Docker [1]
+
+### User roles and access
+Implement secure login with role selection and role-based redirects. After login, users should be routed to their appropriate dashboard based on role [1].
+
+Roles:
+- **Trainer**
+- **LD / HR**
+- **Business Stakeholder**
+- **Admin**
+- **Trainee** if needed for view-only progress access [1]
+
+### Required features
+Include all of the following features from the idea:
+
+#### 1) Automated trainee lifecycle tracking
+Track trainees from onboarding to deployment readiness. Show status progression, stage completion, assessment attempts, score history, gaps between stages, and readiness indicators [1].
+
+#### 2) Score aggregation and talent identification
+Aggregate assessment scores automatically and identify top performers, average performers, and low performers. Highlight deserving talent based on performance trends, competency strength, and consistency [1].
+
+#### 3) Role-based dashboards
+Create real-time dashboards for each role [1]:
+- **Trainer Dashboard:** batch-level progress, trainee details, performance summaries, alerts, module completion, and intervention recommendations.
+- **LD / HR Dashboard:** organization-wide analytics, batch comparisons, trend analysis, cohort performance, and training effectiveness.
+- **Business Stakeholder Dashboard:** deployment readiness, high-level batch outcomes, talent pool visibility, and strategic insights.
+- **Admin Dashboard:** user management, system health, alert monitoring, tickets, access control, and operational oversight.
+
+#### 4) Exportable reports
+Allow exporting reports in **PDF and Excel** formats [1]. Include batch reports, trainee summaries, performance reports, risk reports, and readiness reports.
+
+#### 5) AI/GenAI features
+Add these AI use cases exactly:
+- **Dropout Prediction:** input scores, attempts, and stage gaps; output risk level (High / Medium / Low) and a reason [1].
+- **CPM Matching:** input skills, scores, and competency data; output the best-fit project recommendation with justification [1].
+- **Performance Insight:** input overall trainee performance data; output a short summary of strengths, weaknesses, and suggestions [1].
+
+### Differentiators to include
+Include these standout features prominently [1]:
+- **Attempt heatmap** showing color-coded struggle areas across assessment modules batch-wise.
+- **Dropout risk prediction** with alerts to training coordinators for at-risk trainees.
+- **Smart competency-to-project matching** for aligning trainees with suitable business requirements.
+- **Cross-batch benchmarking** to compare batch performance and identify deployment-ready batches.
+
+### Dashboard and analytics requirements
+Design the UI around a clean analytics workspace with:
+- KPI cards for average score, completion rate, risk count, top performers, and deployment-ready count.
+- Batch filters, date filters, role-based filters, and competency filters.
+- Tables for trainee records with search, sort, and status badges.
+- Charts for score trends, batch comparisons, competency distribution, attempt heatmaps, and risk distribution.
+- Drill-down views from batch to trainee to assessment details.
+- Alert banners and notification panels for low performance, failed attempts, and high dropout risk [1].
+
+### Data model
+Design database entities for:
+- Users
+- Roles
+- Trainees
+- Batches
+- Assessments
+- Assessment attempts
+- Competencies
+- Scores
+- Alerts
+- Export reports
+- AI insights
+- Project matching recommendations
+- Audit logs [1]
+
+### Business logic
+Implement:
+- Automatic score aggregation from uploaded or entered assessments.
+- Detection of low performers based on thresholds and trends.
+- Detection of top performers based on score consistency and competency performance.
+- Deployment readiness scoring.
+- Dropout risk scoring using AI plus rule-based fallback.
+- Batch benchmarking calculations.
+- Role-based visibility and permissions.
+- Human-in-the-loop override for AI risk flags and classifications [1].
+
+### Excel upload and validation
+Support Excel upload for trainee data using a standardized template. Validate required columns, missing values, invalid scores, and inconsistent stage data. Show preview before import and error messages for bad rows [1].
+
+### AI workflow and cost control
+Use a cost-aware AI workflow:
+- Trigger AI only for new uploads or major data changes.
+- Cache previous AI results.
+- Use short structured prompts.
+- Use rule-based logic for basic performer identification and score aggregation.
+- Include human validation before finalizing AI-generated risk or recommendation outputs [1].
+
+### UI/UX style
+Make it modern, professional, and dashboard-first. Use a clean enterprise design with:
+- Sidebar navigation
+- Top metrics section
+- Cards and data tables
+- Color-coded status indicators
+- Clear charting and operational visuals
+- Responsive design for desktop and tablet
+
+### Suggested pages
+Create these pages:
+1. **Login / Role Selection**
+2. **Trainer Dashboard**
+3. **LD / HR Dashboard**
+4. **Business Stakeholder Dashboard**
+5. **Admin Dashboard**
+6. **Trainee Detail Page**
+7. **Batch Detail Page**
+8. **AI Insights Page**
+9. **Reports and Exports Page**
+10. **User Management / System Settings Page** [1]
+
+### Acceptance criteria
+The app should:
+- Work as a centralized source of truth for trainee performance.
+- Support secure role-based access.
+- Show live analytical dashboards.
+- Identify top and low performers automatically.
+- Predict dropout risk.
+- Recommend project fit using competency data.
+- Export reports in PDF and Excel.
+- Support scalable architecture with Angular frontend and FastAPI backend [1].
+
+### Implementation notes
+Use Angular for the frontend, FastAPI for APIs, SQLAlchemy for ORM, Pandas for data processing, JWT for authentication, OpenPyXL for Excel export, and PostgreSQL-ready schema with SQLite support for local development. Structure the app so it can later integrate Azure-hosted GenAI APIs, PowerBI dashboards, and Docker deployment [1].
+
+***
+
+## Optional shorter version
+If you want a shorter prompt for tools that work best with concise instructions, I can compress this into a tighter “single paste” version while keeping every feature.
+
