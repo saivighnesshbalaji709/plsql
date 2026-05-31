@@ -1,0 +1,89 @@
+<dataTemplate name="XXOAHRCMCREP" version="1.0">
+  <properties>
+    <property name="xml_tag_case" value="UPPER"/>
+    <property name="debug_mode" value="ON"/>
+  </properties>
+  <parameters>
+    <parameter name="P_EMP_NO" dataType="VARCHAR2"/>
+  </parameters>
+  
+  <dataQuery>
+  <sqlStatement name="Q_MAIN4">
+<![CDATA[
+select (select Employee_number from per_all_people_f where person_id = :p_emp_no and trunc(sysdate) between effective_start_date and effective_end_date 
+     and rownum = 1) as PEMP_NO
+	 from dual
+
+]]>
+</sqlStatement>
+
+    <sqlStatement name="Q_MAIN">
+      <![CDATA[
+SELECT
+    pac.segment1 as application_type,
+    pac.segment2 as staff_number,
+    pac.segment3 as surname,
+    pac.segment4 as firstname,
+    pac.segment5 as dob,
+    pac.segment6 as gender,
+    pac.segment7 as nationality,
+    pac.segment8 as license_number,
+    pac.segment10 as passport_number,
+	pac.segment13 as valid_until,
+	pac.segment14 as contact_number,
+	pac.segment23 as crew_remarks,
+	pac.segment18 as valid_to,
+    pac.segment22 as security_remarks,
+    fl.file_data as attachment_image,
+	pimg.image as employee_image
+   
+FROM per_all_people_f          papf,
+     per_images                pimg,
+     per_person_analyses       pap
+JOIN per_analysis_criteria      pac
+    ON pap.analysis_criteria_id = pac.analysis_criteria_id
+JOIN per_special_info_types_v psit
+    ON psit.id_flex_num = pap.id_flex_num
+LEFT JOIN fnd_attached_documents fad
+    ON fad.entity_name = 'PER_PEOPLE_F'
+    AND fad.pk1_value = TO_CHAR(pap.person_id)
+LEFT JOIN fnd_documents fd  
+    ON fad.document_id = fd.document_id
+LEFT JOIN fnd_lobs fl  
+    ON fd.media_id = fl.file_id
+ 
+WHERE papf.person_id = pimg.parent_id
+     AND TRUNC(SYSDATE) BETWEEN papf.effective_start_date AND papf.effective_end_date
+	 AND papf.person_id = :P_EMP_NO
+     AND pap.person_id = :P_EMP_NO
+     AND UPPER(fl.file_name) like '%SIGNATURE%' 
+     AND fl.file_content_type like '%jpeg%'
+     AND psit.name = 'Crew Member Certificate App'
+     ORDER BY pap.person_id
+      ]]>
+    </sqlStatement>
+  </dataQuery>
+  <dataStructure>
+	<group name="G_MAIN4" source="Q_MAIN4">
+    <element name="PEMP_NO"      datatype="VARCHAR2"    value="PEMP_NO"/>
+    </group>
+    <group name="G_MAIN" source="Q_MAIN">
+      <element name="APPLICATION_TYPE" datatype="VARCHAR2" value="APPLICATION_TYPE"/>
+      <element name="STAFF_NUMBER"           datatype="VARCHAR2" value="STAFF_NUMBER"/>
+      <element name="SURNAME"    datatype="VARCHAR2" value="SURNAME"/>
+      <element name="FIRSTNAME"       datatype="VARCHAR2" value="FIRSTNAME"/>
+      <element name="DOB"         datatype="VARCHAR2" value="DOB"/>
+      <element name="GENDER" datatype="VARCHAR2" value="GENDER"/>
+      <element name="NATIONALITY" datatype="VARCHAR2" value="NATIONALITY"/>
+      <element name="LICENSE_NUMBER"    datatype="VARCHAR2" value="LICENSE_NUMBER"/>
+      <element name="PASSPORT_NUMBER"    datatype="VARCHAR2" value="PASSPORT_NUMBER"/>
+      <element name="VALID_UNTIL"      datatype="VARCHAR2" value="VALID_UNTIL"/>
+      <element name="CONTACT_NUMBER"     datatype="VARCHAR2" value="CONTACT_NUMBER"/>
+      <element name="CREW_REMARKS"       datatype="VARCHAR2" value="CREW_REMARKS"/>
+      <element name="VALID_TO"      datatype="VARCHAR2" value="VALID_TO"/>
+      <element name="SECURITY_REMARKS"    datatype="VARCHAR2" value="SECURITY_REMARKS"/>
+      <element name="ATTACHMENT_IMAGE"   datatype="BLOB" value="ATTACHMENT_IMAGE"/>
+	  <element name="EMPLOYEE_IMAGE"   datatype="BLOB" value="EMPLOYEE_IMAGE"/>
+    </group>
+  </dataStructure>
+</dataTemplate>
