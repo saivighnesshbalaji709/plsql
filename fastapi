@@ -1,3 +1,5 @@
 type F:\Talent_Pulse\talent-pulse\backend\app\main.py
 
 python -c "from app.api.v1.router import router; print('Router OK:', len(router.routes), 'routes')"
+
+Invoke-WebRequest -Uri "http://localhost:8000/api/v1/auth/login" -Method POST -ContentType "application/json" -Body '{"email":"admin@hexaware.com","password":"admin123"}'
