@@ -6,3 +6,8 @@ python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python -m uvicorn app.main:app --reload
+
+$env:PATH += ";C:\Program Files\nodejs"
+node --version
+
+AQ.Ab8RN6LoDJqVcNI96A72Cif7E9JL7cRQKXwWxKJ8zcE84RTNog
