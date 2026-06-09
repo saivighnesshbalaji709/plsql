@@ -1,1 +1,3 @@
 type F:\Talent_Pulse\talent-pulse\backend\app\main.py
+
+python -c "from app.api.v1.router import router; print('Router OK:', len(router.routes), 'routes')"
