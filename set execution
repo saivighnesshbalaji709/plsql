@@ -1,0 +1,8 @@
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+cd C:\Users\vyasM\Downloads\hexaware-talentpulse-v2\hexaware-talentpulse-v2\talent-pulse\backend
+Remove-Item -Recurse -Force venv
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
