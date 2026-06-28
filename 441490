@@ -1,0 +1,539 @@
+CREATE OR REPLACE PACKAGE BODY XXOA_LINK_EMP2USER_ALL_PKG
+AS
+/******************************************************************************
+   NAME:       XXOA_LINK_EMP2USER_ALL_PKG
+   PURPOSE: Linking the FND_USER with Employee and assign the Default  Responsibility    
+
+   REVISIONS:
+   Ver        Date        Author           
+   ---------  ----------  ---------------  ------------------------------------
+   1.0        17-Feb-2022   Hexaware     
+   1.1        24-Jun-2026   Hexaware(Sai)   SR#441490 Default responsibilities for unclassified Payroll
+
+******************************************************************************/
+PROCEDURE xxoa_resp_send_mail (p_to        IN VARCHAR2,
+                                       p_from      IN VARCHAR2,
+                                       p_subject   IN VARCHAR2,
+                                       p_text_msg  IN VARCHAR2 DEFAULT NULL,
+                                       p_html_msg  IN VARCHAR2 DEFAULT NULL,
+                                       p_smtp_host IN VARCHAR2,
+                                       p_smtp_port IN NUMBER )
+AS
+  l_mail_conn   UTL_SMTP.connection;
+  l_boundary    VARCHAR2(50) := '----=*#abc1234321cba#*=';
+BEGIN
+fnd_file.put_line (fnd_file.output,'STEP Enter 1');
+  l_mail_conn := UTL_SMTP.open_connection(p_smtp_host,p_smtp_port);--('10.241.8.15',25);
+  UTL_SMTP.helo(l_mail_conn, p_smtp_host);---'10.241.8.15');
+  UTL_SMTP.mail(l_mail_conn, p_from);
+  UTL_SMTP.rcpt(l_mail_conn, p_to);
+fnd_file.put_line (fnd_file.output,'STEP Enter 2' ||p_html_msg);
+  UTL_SMTP.open_data(l_mail_conn);
+  
+  UTL_SMTP.write_data(l_mail_conn, 'Date: ' || TO_CHAR(SYSDATE, 'DD-MON-YYYY HH24:MI:SS') || UTL_TCP.crlf);
+  UTL_SMTP.write_data(l_mail_conn, 'To: ' || p_to || UTL_TCP.crlf);
+  UTL_SMTP.write_data(l_mail_conn, 'From: ' || p_from || UTL_TCP.crlf);
+  UTL_SMTP.write_data(l_mail_conn, 'Subject: ' || p_subject || UTL_TCP.crlf);
+  UTL_SMTP.write_data(l_mail_conn, 'Reply-To: ' || p_from || UTL_TCP.crlf);
+  UTL_SMTP.write_data(l_mail_conn, 'MIME-Version: 1.0' || UTL_TCP.crlf);
+  UTL_SMTP.write_data(l_mail_conn, 'Content-Type: multipart/alternative; boundary="' || l_boundary || '"' || UTL_TCP.crlf || UTL_TCP.crlf);
+ fnd_file.put_line (fnd_file.output,'STEP4'); 
+  IF p_text_msg IS NOT NULL THEN
+  fnd_file.put_line (fnd_file.output,'STEP5'); 
+    UTL_SMTP.write_data(l_mail_conn, '--' || l_boundary || UTL_TCP.crlf);
+    UTL_SMTP.write_data(l_mail_conn, 'Content-Type: text/plain; charset="iso-8859-1"' || UTL_TCP.crlf || UTL_TCP.crlf);
+
+    UTL_SMTP.write_data(l_mail_conn, p_text_msg);
+    UTL_SMTP.write_data(l_mail_conn, UTL_TCP.crlf || UTL_TCP.crlf);
+  END IF;
+
+  IF p_html_msg IS NOT NULL THEN
+   fnd_file.put_line (fnd_file.output,'STEP6'); 
+    UTL_SMTP.write_data(l_mail_conn, '--' || l_boundary || UTL_TCP.crlf);
+    UTL_SMTP.write_data(l_mail_conn, 'Content-Type: text/html; charset="iso-8859-1"' || UTL_TCP.crlf || UTL_TCP.crlf);
+
+    UTL_SMTP.write_data(l_mail_conn, p_html_msg);
+    UTL_SMTP.write_data(l_mail_conn, UTL_TCP.crlf || UTL_TCP.crlf);
+  END IF;
+
+  UTL_SMTP.write_data(l_mail_conn, '--' || l_boundary || '--' || UTL_TCP.crlf);
+  UTL_SMTP.close_data(l_mail_conn);
+ fnd_file.put_line (fnd_file.output,'STEP7'); 
+  UTL_SMTP.quit(l_mail_conn);
+END xxoa_resp_send_mail;
+  
+  
+  PROCEDURE XXOA_RESP_ERROR_MAIL
+   IS
+      l_cc_main      VARCHAR2 (200);
+      l_to_email     VARCHAR2 (200);--- := 'shamkumar.kathirvelu@omanair.com';
+      l_smtp         VARCHAR2 (200):=null;
+      l_port         NUMBER  :=  null;
+      l_cc_email     VARCHAR2 (200);
+      l_cc_email1    VARCHAR2 (200);
+      l_bc_email     VARCHAR2 (200);
+      l_bc_email1    VARCHAR2 (200);
+      l_bcc          VARCHAR2 (200);
+      l_subject      VARCHAR2 (200) := 'OA Default Responsibility Addition Error - ' || SYSDATE ;
+      l_from_email   VARCHAR2 (200) ;----:= 'shamkumar.kathirvelu@omanair.com';
+      l_document     LONG;
+      v_step         NUMBER;
+      l_dear         VARCHAR2 (2000) := 'Hi Team';
+      v_send_mail    NUMBER;
+      l_err_msg      VARCHAR2 (200);
+   BEGIN
+      l_document :=
+         l_document
+         || '<p><span style="FONT-SIZE: 9pt; COLOR: black; FONT-FAMILY: Verdana; mso-fareast-font-family: '
+         || '''Times New Roman'''
+         || '; mso-bidi-font-family: Verdana; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA">'
+         || INITCAP (l_dear)
+         || ','
+         || '</br></br>'
+         || 'This email serves that default responsibilities addition transactions are errored out for below mentioned staffs.'
+         || '</p></span>';
+
+      l_document :=
+         l_document || '<TABLE border="1" cellspacing="10" cellpadding="10">';
+      l_document :=
+         l_document || '<tr>' || '<td width="301" align=left>'
+         || '<span style="FONT-SIZE: 9pt; COLOR: black; FONT-FAMILY: Verdana; mso-fareast-font-family: '
+         || '''Times New Roman'''
+         || '; mso-bidi-font-family: Verdana; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA">'
+         || '<b><u>Staff Number</u></b></span></td>';
+     
+      l_document :=
+         l_document || '<td width="301" align=left>'
+         || '<span style="FONT-SIZE: 9pt; COLOR: black; FONT-FAMILY: Verdana; mso-fareast-font-family: '
+         || '''Times New Roman'''
+         || '; mso-bidi-font-family: Verdana; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA">'
+         || '<b><u>Staff Name</u></b></span></td>';
+
+      v_send_mail := 0;
+fnd_file.put_line (fnd_file.output,'STEP1');
+
+      FOR rec
+      IN (SELECT   Emp_Number ,
+                   emp_name
+             FROM   XXOA_RESP_ERR_TABLE
+           WHERE   upper(STATUS) = 'FAIL')
+                --   AND TRUNC (EVENT_DATE) = TRUNC (SYSDATE))
+      LOOP
+      fnd_file.put_line (fnd_file.output,'STEP2');
+         v_send_mail := v_send_mail + 1;
+
+         l_document := l_document || '<tr>';
+
+         l_document :=
+            l_document
+            || '<td width="100" align=left wrap="off"><font face="Verdana" size="2">'
+            || rec.Emp_Number
+            || '</td></font>';
+
+         l_document :=
+            l_document
+            || '<td width="500" align=left wrap="off"><font face="Verdana" size="2">'
+            || rec.emp_name
+            || '</td></font>';
+
+      END LOOP;
+
+      l_document := l_document || '</TABLE>' || '</br></br></br>';
+
+      l_document :=         l_document
+         || '<p><span style="FONT-SIZE: 9pt; COLOR: black; FONT-FAMILY: Verdana; mso-fareast-font-family: '
+         || '''Times New Roman'''
+         || '; mso-bidi-font-family: Verdana; mso-ansi-language: EN-US; mso-fareast-language: EN-US; mso-bidi-language: AR-SA">'
+         || '</br>'
+         || 'Regards,'
+         || '</br>'
+         || 'IT Team.'
+         || '</p></span>';
+
+    --  IF v_send_mail > 0
+    --  THEN
+      
+      fnd_file.put_line (fnd_file.output,'STEP3');
+      BEGIN
+select MEANING into l_from_email
+  from fnd_lookup_values
+ Where lookup_type  ='XXOA_RESP_MAIL_FROM' and language='US' and lookup_code='MFROM';
+EXCEPTION WHEN OTHERS THEN 
+fnd_file.put_line (fnd_file.output,'error getting look up meaning');
+END;
+
+  BEGIN
+ select MEANING into l_to_email
+  from fnd_lookup_values
+ Where lookup_type  ='XXOA_RESP_MAIL_TO' and language='US' and lookup_code='MTO';
+EXCEPTION WHEN OTHERS THEN 
+fnd_file.put_line (fnd_file.output,'error getting look up meaning');
+END;
+
+BEGIN
+ select MEANING into l_smtp
+  from fnd_lookup_values
+ Where lookup_type  ='XXOA_MAIL_SMTP_HOST' and language='US' and lookup_code='HOST';
+EXCEPTION WHEN OTHERS THEN 
+fnd_file.put_line (fnd_file.output,'error in getting SMTP host details from lookup');
+END;
+
+  BEGIN
+ select to_number(MEANING) into l_port
+  from fnd_lookup_values
+ Where lookup_type  ='XXOA_MAIL_SMTP_PORT' and language='US' and lookup_code='PORT';
+EXCEPTION WHEN OTHERS THEN 
+fnd_file.put_line (fnd_file.output,'error in getting mail Port details from lookup');
+END;
+
+      
+           xxoa_resp_send_mail (             l_to_email,
+                                               l_from_email,
+                                             --  l_cc_email,
+                                             --  l_bcc,
+                                               l_subject,
+                                               null,
+                                             --  l_document,
+                                               l_document,
+                                              l_smtp,--- '10.241.8.15', ----bizmail.scholastic.com
+                                               l_port); ---*/
+     -- END IF;
+         update  XXOA_RESP_ERR_TABLE
+           set STATUS = 'SENT'
+           where upper(status) ='FAIL';
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         l_err_msg := SQLERRM;
+         fnd_file.put_line (fnd_file.output,'STEP3 ERR '||l_err_msg);
+         fnd_file.put_line (
+            fnd_file.LOG,
+            'Mail has not been sent to the user : ' || l_err_msg);
+   END XXOA_RESP_ERROR_MAIL;
+  
+
+
+  PROCEDURE XXOA_LINK_EMP2USER_ALL(p_errbuf    OUT   VARCHAR2,
+   p_retcode   OUT   NUMBER) IS
+l_cnt number :=0;
+/******************************************************************************
+   NAME:       XXOA_LINK_EMP2USER_ALL
+   PURPOSE: Linking the FND_USER with Employee and assign the Default  Responsibility    
+
+   REVISIONS:
+   Ver        Date        Author           Description
+   ---------  ----------  ---------------  ------------------------------------
+   1.0        8/25/2013   6801       1. Created this procedure.
+
+******************************************************************************/
+begin
+
+for c in (
+select employee_number   from apps.per_all_people_f
+where employee_number in (select user_name from apps.fnd_user u where EMPLOYEE_ID   is null
+and END_DATE is null
+and ascii(substr(user_name,1,1)) between 49 and 57
+and user_name not like'%DS' and  user_name not like '%OLD')  
+and EFFECTIVE_END_DATE > sysdate
+and CURRENT_EMPLOYEE_FLAG='Y')
+
+Loop
+    dbms_output.put_line(c.employee_number);
+     XXOA_LINK_EMP2USER(c.employee_number);
+ 
+End Loop;
+l_cnt:=0;
+begin
+
+SELECT  count(1) into l_cnt 
+FROM   XXOA_RESP_ERR_TABLE  WHERE   upper(STATUS) = 'FAIL';
+
+ if    l_cnt<>0
+ then
+XXOA_RESP_ERROR_MAIL;
+end if;
+exception when others then
+    dbms_output.put_line('Error in Mail sending  : ' ||(SUBSTR (SQLERRM, 1, 254)));
+end;
+
+END XXOA_LINK_EMP2USER_ALL;
+
+PROCEDURE XXOA_INSERT_ERR_MSG(P_EMP_NO varchar2,p_emp_name varchar2,P_MSG varchar2,P_DATE date,p_status varchar2)
+IS    
+      PRAGMA AUTONOMOUS_TRANSACTION;
+BEGIN
+INSERT INTO XXOA.XXOA_RESP_ERR_TABLE
+VALUES (P_EMP_NO,p_emp_name, P_MSG, P_DATE,p_status);
+commit;
+EXCEPTION WHEN OTHERS THEN
+
+       fnd_file.put_line (fnd_file.LOG, 'Error in inserting data in error table for emp number : '||P_EMP_NO  );
+	
+    end ;
+
+
+PROCEDURE      xxoa_link_emp2user (p_employee_id VARCHAR2)
+IS
+   l_person_id               NUMBER;
+   l_user_id                 NUMBER;
+   l_party_id                NUMBER;
+   l_email_address           VARCHAR2 (100);
+   l_return_status           VARCHAR2 (1);
+   l_msg_count               NUMBER;
+   l_msg_data                VARCHAR2 (240);
+   exception_tag_user_id     NUMBER;
+   api_unexpectedly_failed   EXCEPTION;
+   l_emp_exists              BOOLEAN;
+   l_assignemnt_exists       BOOLEAN;
+   l_user_exists             BOOLEAN;
+   l_resp_count              NUMBER;
+   l_sec_attrib_count        NUMBER;
+   l_emp_num                 VARCHAR2(10);
+   l_payroll                 VARCHAR2(40):=null;
+   l_resp_key                VARCHAR2(180):=null;
+   l_appl_name              VARCHAR2(40):=null;
+   l_emp_name            varchar2(400):=null;
+   
+cursor c_resp_Det (p_payroll Varchar2)   is 
+SELECT pur.row_low_range_or_name resp_name, pucif.value resp_key
+FROM pay_user_column_instances_f pucif
+,pay_user_rows_f pur
+,pay_user_columns puc
+,pay_user_tables put
+WHERE put.user_table_id = puc.user_table_id
+AND put.user_table_id = pur.user_table_id
+AND pucif.user_row_id = pur.user_row_id
+AND pucif.user_column_id = puc.user_column_id
+AND trunc(SYSDATE) BETWEEN pur.effective_start_date
+AND pur.effective_end_date
+AND trunc(SYSDATE) BETWEEN pucif.effective_start_date
+AND pucif.effective_end_date
+AND upper(puc.user_column_name) = upper(p_payroll)
+AND put.user_table_name = 'XXOA_PAYROLLWISE_RESPONSIBILITY';
+   
+BEGIN
+   BEGIN
+      l_emp_exists := TRUE;
+ 
+      SELECT person_id, party_id,full_name
+        INTO l_person_id, l_party_id,l_emp_name
+        FROM per_all_people_f
+       WHERE     employee_number = p_employee_id
+             AND SYSDATE BETWEEN effective_start_date AND effective_end_date
+             and current_employee_flag='Y';
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         l_emp_exists := FALSE;
+         XXOA_INSERT_ERR_MSG(p_employee_id,l_emp_name,'Employee record not created yet or it is not active.',sysdate,'Fail');
+          fnd_file.put_line (fnd_file.LOG,p_employee_id ||'  Employee record not created yet or it is not active ' );
+   END;
+---- XXOA_INSERT_ERR_MSG(p_employee_id,l_emp_name,'Payroll Name for Emp is not available . ',sysdate,'Fail');
+   BEGIN
+      l_assignemnt_exists := TRUE;
+
+      SELECT person_id, assignment_number,(select payroll_name from pay_payrolls_f where PAYROLL_ID =paaf.payroll_id) payroll_name
+   INTO l_person_id, l_emp_num,l_payroll
+        FROM per_all_assignments_f paaf
+       WHERE     person_id = l_person_id and assignment_type='E'
+             AND SYSDATE BETWEEN effective_start_date AND effective_end_date;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         l_assignemnt_exists := FALSE;
+        XXOA_INSERT_ERR_MSG(p_employee_id,l_emp_name,'Employee assignment not created yet or it is not active.',sysdate,'Fail');
+          fnd_file.put_line (fnd_file.LOG,p_employee_id ||'   Employee assignment not created yet or it is not active.');
+   END;
+   if l_emp_num <> p_employee_id then
+       l_assignemnt_exists := FALSE;
+          XXOA_INSERT_ERR_MSG(p_employee_id,l_emp_name,'Employee assignment number doest not match the employee number.',sysdate,'Fail');
+         fnd_file.put_line (fnd_file.LOG,p_employee_id||'  Employee assignment number doest not match the employee number.');
+       
+   end if;
+
+   BEGIN
+      l_user_exists := TRUE;
+
+      SELECT user_id, email_address
+        INTO l_user_id, l_email_address
+        FROM fnd_user u
+       WHERE u.user_name = p_employee_id;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         l_user_exists := FALSE;
+          XXOA_INSERT_ERR_MSG(p_employee_id,l_emp_name,'User Account not created yet.',sysdate,'Fail');
+          fnd_file.put_line (fnd_file.LOG,p_employee_id||'  User Account not created yet,');
+   END;
+If l_payroll is not null then
+   IF l_user_exists AND l_emp_exists AND l_assignemnt_exists
+   THEN
+   
+      fnd_user_pkg.updateuserPARTY (x_user_name         => p_employee_id,
+                                    X_OWNER             => 'CUSTOM',
+                                    X_PERSON_PARTY_ID   => l_party_id);
+      fnd_user_pkg.updateuser (x_user_name       => p_employee_id,
+                               X_OWNER           => 'CUSTOM',
+                               X_employee_ID     => l_person_id,
+                               X_customer_id     => FND_USER_PKG.NULL_NUMBER,
+                               X_email_address   => l_email_address);
+
+      COMMIT;
+/*l_resp_key:=null;
+If l_payroll is not null then
+If upper(l_payroll)=upper('Base Payroll')
+then l_resp_key := 'OAHR_HQ_EMPLOYEE_DIRECT_ACCESS';
+elsif  upper(l_payroll)=upper('Cargo Payroll')
+then 
+l_resp_key := 'OAHR_CARGO_EMP_DIRECT_ACCESS';
+elsif upper(l_payroll)=upper('Catering Payroll')
+then 
+l_resp_key := 'OAHR_CATER_EMP_DIRECT_ACCESS';
+elsif  upper(l_payroll)=upper('OGH Payroll')
+then
+l_resp_key := 'OAHR_OGH_EMP_DIRECT_ACCESS';
+else
+l_resp_key := 'OAHR_IND_EMPLOYEE_DIRECT_ACCES';
+end if;
+else
+l_resp_key:=null;
+  XXOA_INSERT_ERR_MSG(p_employee_id,'Payroll Name for Emp is not available . ',sysdate,'Fail');
+ end if;
+*/
+
+
+if l_payroll not in ('Base Payroll','Cargo Payroll','Catering Payroll','OGH Payroll','Unclassified Payroll','Executive Payroll') --Added Unclassified and Executive Payroll for SR#441490
+then l_payroll := 'Outstation Payroll';
+end if;
+FOR rec_resp in c_resp_det(l_payroll)
+LOOP
+ 
+      SELECT COUNT (1)
+        INTO l_resp_count
+        FROM fnd_user_resp_groups furg, fnd_user fu, fnd_responsibility fr
+       WHERE     furg.user_id = fu.user_id
+             AND furg.responsibility_id = fr.responsibility_id
+             AND fu.user_name = p_employee_id
+             AND fr.responsibility_key = rec_resp.resp_key---'OAHR_HQ_EMPLOYEE_DIRECT_ACCESS'
+             AND SYSDATE BETWEEN fu.start_date
+                             AND NVL (fu.end_date, '31-dec-2412');
+
+      begin
+       l_appl_name:=null;
+       select APPLICATION_SHORT_NAME into l_appl_name
+    from fnd_application fa ,fnd_responsibility fr 
+    where fa.APPLICATION_ID=fr.APPLICATION_ID
+        and fr.RESPONSIBILITY_KEY=rec_resp.resp_key;
+     exception when others then
+XXOA_INSERT_ERR_MSG(p_employee_id,l_emp_name,
+ 'Error in fetching application sort name for  '||rec_resp.resp_name||' '||(SUBSTR (SQLERRM, 1, 254)),sysdate,'Fail');
+  end ;
+ 
+
+      IF l_resp_count = 0 and l_appl_name is not null
+      THEN
+       begin
+
+       fnd_user_pkg.addresp (username         => p_employee_id,
+                               resp_app         => l_appl_name,---'PER',
+                               resp_key         => rec_resp.resp_key,----'OAHR_HQ_EMPLOYEE_DIRECT_ACCESS',
+                               security_group   => 'STANDARD',
+                               description      => NULL,
+                               start_date       => SYSDATE,
+                               end_date         => NULL);
+                               exception when others then
+                               XXOA_INSERT_ERR_MSG(p_employee_id,l_emp_name,
+                            'Error in '||rec_resp.resp_name||'  
+                            Responsibility addition API  . '||(SUBSTR (SQLERRM, 1, 254)),sysdate,'Fail');
+                         
+                         end ;
+         COMMIT;
+          fnd_file.put_line (fnd_file.LOG,rec_resp.resp_name||' added for Emp number  '||p_employee_id);
+      ELSE
+          fnd_file.put_line (fnd_file.LOG,rec_resp.resp_name||' already active for Emp Number  '||p_employee_id);
+      END IF;
+
+End loop;
+
+      SELECT COUNT (1)
+        INTO l_sec_attrib_count
+        FROM AK_WEB_USER_SEC_ATTR_VALUES
+       WHERE     web_user_id = l_user_id
+             AND attribute_code = 'ICX_HR_PERSON_ID'
+             AND attribute_application_id = 178;
+
+      IF l_sec_attrib_count = 0
+      THEN
+     
+     Begin
+     icx_user_sec_attr_pub.create_user_sec_attr (
+            p_api_version_number   => 1,
+            p_web_user_id          => l_user_id,
+            p_attribute_code       => 'ICX_HR_PERSON_ID',
+            p_attribute_appl_id    => 178,
+            p_varchar2_value       => fnd_api.g_false,
+            p_date_value           => fnd_api.g_miss_date,
+            p_number_value         => l_person_id,
+            p_created_by           => '-1',
+            p_creation_date        => SYSDATE,
+            p_last_updated_by      => '-1',
+            p_last_update_date     => SYSDATE,
+            p_last_update_login    => '-1',
+            p_return_status        => l_return_status,
+            p_msg_count            => l_msg_count,
+            p_msg_data             => l_msg_data);
+          fnd_file.put_line (fnd_file.LOG,'Security Attribute ICX_HR_PERSON_ID added for Emp Number  '||p_employee_id);
+         exception when others then
+        XXOA_INSERT_ERR_MSG(p_employee_id,l_emp_name,'Error in Security Attribute ICX_HR_PERSON_ID  addition API  . '||(SUBSTR (SQLERRM, 1, 254)),sysdate,'Fail');
+        End;
+      ELSE
+          fnd_file.put_line (fnd_file.LOG,'Security Attribute ICX_HR_PERSON_ID already set for Emp Number  '||p_employee_id);
+      END IF;
+
+      SELECT COUNT (1)
+        INTO l_sec_attrib_count
+        FROM AK_WEB_USER_SEC_ATTR_VALUES
+       WHERE     web_user_id = l_user_id
+             AND attribute_code = 'TO_PERSON_ID'
+             AND attribute_application_id = 178;
+
+      IF l_sec_attrib_count = 0
+      THEN
+      BEGIN
+         icx_user_sec_attr_pub.create_user_sec_attr (
+            p_api_version_number   => 1,
+            p_web_user_id          => l_user_id,
+            p_attribute_code       => 'TO_PERSON_ID',
+            p_attribute_appl_id    => 178,
+            p_varchar2_value       => fnd_api.g_false,
+            p_date_value           => fnd_api.g_miss_date,
+            p_number_value         => l_person_id,
+            p_created_by           => '-1',
+            p_creation_date        => SYSDATE,
+            p_last_updated_by      => '-1',
+            p_last_update_date     => SYSDATE,
+            p_last_update_login    => '-1',
+            p_return_status        => l_return_status,
+            p_msg_count            => l_msg_count,
+            p_msg_data             => l_msg_data);
+          fnd_file.put_line (fnd_file.LOG,'Security Attribute TO_PERSON_ID added for Emp Number  '||p_employee_id);
+         exception when others then
+        XXOA_INSERT_ERR_MSG(p_employee_id,l_emp_name,'Error in Security Attribute to person  addition API  . '||(SUBSTR (SQLERRM, 1, 254)),sysdate,'Fail');
+        End;
+      ELSE
+          fnd_file.put_line (fnd_file.LOG,'Security Attribute TO_PERSON_ID already set  for Emp Number  '||p_employee_id);
+      END IF;
+     begin
+      fnd_user_pkg.user_synch (p_employee_id);
+       exception when others then
+        XXOA_INSERT_ERR_MSG(p_employee_id,l_emp_name,'Error in fnd_user_pkg user_synch API call . '||(SUBSTR (SQLERRM, 1, 254)),sysdate,'Fail');
+        End;
+      COMMIT;
+       fnd_file.put_line (fnd_file.LOG,'Employee Id attached to User record for Emp Number  '||p_employee_id);
+   END IF;
+   else
+
+  XXOA_INSERT_ERR_MSG(p_employee_id,l_emp_name,'Payroll Name for Emp is not available . ',sysdate,'Fail');
+ end if;
+END;
+end XXOA_LINK_EMP2USER_ALL_PKG;  
