@@ -1,0 +1,145 @@
+SELECT papf.person_id
+               ,paaf.assignment_id
+               ,papf.employee_number
+			   ,DECODE(papf.attribute2,'MUSLIM','Muslim','Non Muslim') religion -- Added for SR 226704
+         FROM   hxc_timecard_summary hts
+               ,per_all_people_f papf
+               ,per_all_assignments_f paaf
+               ,hr_all_organization_units hou
+         WHERE  papf.person_id = hts.resource_id
+         AND    papf.person_id = paaf.person_id
+         AND    papf.business_group_id = paaf.business_group_id
+         AND    paaf.primary_flag = 'Y'
+         AND    hou.organization_id = paaf.organization_id
+		 AND    paaf.payroll_id = 181 -- Added for SR 190134
+         AND    papf.person_id = NVL (4013, papf.person_id)
+         AND    papf.business_group_id =
+                   fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID')
+         AND    TRUNC (hts.start_time) BETWEEN papf.effective_start_date
+                                           AND papf.effective_end_date
+         AND    TRUNC (hts.start_time) BETWEEN paaf.effective_start_date
+                                           AND paaf.effective_end_date
+         AND    hts.approval_status = 'APPROVED'
+      ---   AND    TRUNC (hts.start_time) BETWEEN c_start_date AND c_end_date commented for SR 190134
+	    AND :c_start_date BETWEEN TRUNC (hts.start_time) AND TRUNC (hts.stop_time) -- Added For  SR 190134
+         AND    EXISTS
+                   (SELECT 1
+                    FROM   xxoa_pay_lee_values_v lee
+                    WHERE  UPPER (lee.element_name) LIKE
+                              UPPER ('%Late%Coming%Early%Going%Information%')
+                    AND    lee.business_group_id + 0 =
+                              fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID')
+                    AND    lee.person_id = papf.person_id
+                    AND    lee.effective_end_date >=
+                              NVL (TRUNC (:c_end_date)
+                                  ,TO_DATE ('01-01-0001'
+                                           ,'DD-MM-YYYY'))
+                    AND    lee.effective_start_date <=
+                              NVL (TRUNC (:c_end_date)
+                                  ,TO_DATE ('31-12-4712'
+                                           ,'DD-MM-YYYY')) /* Check current employee or exemployee. */
+                    AND    ( ('Y' = 'Y'
+                    AND       NVL (lee.current_employee_flag, 'N') = 'Y')
+                    OR       ('Y' = 'Y'
+                    AND       NVL (lee.current_employee_flag, 'N') = 'N'))
+                    /* Only returns the latest one for recurring entry. */
+                    AND    NOT EXISTS
+                                  (SELECT NULL
+                                   FROM   pay_element_entries_f pee
+                                   WHERE  pee.element_entry_id =
+                                             lee.element_entry_id
+                                   AND    pee.effective_start_date >
+                                             lee.effective_start_date
+                                   AND    pee.effective_end_date >=
+                                             NVL (TRUNC (:c_end_date)
+                                                 ,TO_DATE ('01-01-0001'
+                                                          ,'DD-MM-YYYY'))
+                                   AND    pee.effective_start_date <=
+                                             NVL (TO_DATE (TRUNC (:c_end_date)
+                                                          ,'DD-MM-YYYY')
+                                                 ,TO_DATE ('31-12-4712'
+                                                          ,'DD-MM-YYYY')))
+                    /* Custum restriction section */
+                    AND    ('' IS NOT NULL
+                    AND     ( (EXISTS
+                                  (SELECT 1
+                                   FROM   pay_restriction_values prv1
+                                         ,pay_element_set_members pesm1
+                                   WHERE  prv1.restriction_code =
+                                             'ELEMENT_SET'
+                                   AND    prv1.customized_restriction_id = ''
+                                   AND    prv1.VALUE =
+                                             TO_CHAR (pesm1.element_set_id)
+                                   AND    pesm1.element_type_id = 465
+                                   AND    pesm1.element_type_id =
+                                             lee.element_type_id))
+                    OR        (NOT EXISTS
+                                      (SELECT 1
+                                       FROM   pay_restriction_values prv1
+                                       WHERE  prv1.restriction_code =
+                                                 'ELEMENT_SET'
+                                       AND    prv1.customized_restriction_id =
+                                                 '')))
+                    AND     ( (EXISTS
+                                  (SELECT 1
+                                   FROM   pay_element_types_f pet2
+                                         ,pay_restriction_values prv1
+                                   WHERE  prv1.restriction_code =
+                                             'ELEMENT_TYPE'
+                                   AND    prv1.customized_restriction_id = ''
+                                   AND    prv1.VALUE = pet2.processing_type
+                                   AND    pet2.element_type_id =
+                                             lee.element_type_id
+                                   AND    pet2.element_type_id = 465
+                                   AND    TRUNC (:c_end_date) BETWEEN pet2.
+                                                                      effective_start_date
+                                                                 AND pet2.
+                                                                      effective_end_date))
+                    OR        (NOT EXISTS
+                                      (SELECT 1
+                                       FROM   pay_restriction_values prv1
+                                       WHERE  prv1.restriction_code =
+                                                 'ELEMENT_TYPE'
+                                       AND    prv1.customized_restriction_id =
+                                                 '')))
+                    OR       ('' IS NULL)))
+         AND    paaf.person_id IN
+                   (SELECT htgqc.criteria_id
+                    FROM   hxc_tk_group_queries htgq
+                          ,hxc_tk_group_query_criteria htgqc
+                    WHERE  1 = 1 AND htgqc.criteria_type = 'PERSON'
+                    AND    htgq.tk_group_id =
+                              NVL (1, htgq.tk_group_id)
+                    AND    htgq.tk_group_query_id = htgqc.tk_group_query_id)
+         AND    ( (:c_sec IS NULL AND :c_dept IS NULL AND :c_sbu IS NULL)
+         OR       (EXISTS
+                      (SELECT     organization_id_child
+                       FROM       per_org_structure_elements str
+                       WHERE      organization_id_child = paaf.organization_id
+                       CONNECT BY str.organization_id_parent =
+                                     PRIOR str.organization_id_child
+                       AND        str.org_structure_version_id =
+                                     (SELECT organization_structure_id
+                                      FROM   per_organization_structures
+                                      WHERE  primary_structure_flag = 'Y')
+                       AND        str.business_group_id =
+                                     fnd_profile.
+                                      VALUE ('PER_BUSINESS_GROUP_ID')
+                       START WITH str.organization_id_child =
+                                     NVL (
+                                        (SELECT organization_id
+                                         FROM   hr_all_organization_units
+                                         WHERE  organization_id =
+                                                   NVL (NVL (:c_sec, :c_dept)
+                                                       ,:c_sbu))
+                                       ,paaf.organization_id)))); ORA-00932: inconsistent datatypes: expected NUMBER got DATE
+
+https://docs.oracle.com/error-help/db/ora-00932/00932. 00000 -  "expression%s is of data type %s, which is incompatible with expected data type %s"
+*Cause:    The input data type for this SQL operation was incompatible with
+           the expected data type.
+*Action:   Modify the expression to have a compatible data type for the
+           SQL operation.
+*Params:   1) failed_expression
+           type.
+           2) expression_data_type: The data type of the column or expression.
+           3) expected_data_type: The data type expected by the SQL operation. i tried gicing input as '01-may-2026',01-MAY-2026, 01052026,31052026,20260531,01-05-2026 everything and still get the same issue, when i tried to_date('01-05-2026','dd-mm-yyyy'), i get no rows
