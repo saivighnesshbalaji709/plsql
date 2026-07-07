@@ -1,0 +1,2388 @@
+create or replace PACKAGE BODY      xxoa_hr_late_early_ded_rep_new
+AS
+   -- ==================================================+
+   --   Copyright (c) 2011 Company Project  --
+   --  All rights reserved.  --
+   -- ==================================================+
+   --  NAME
+   --   xxoa_hr_late_early_ded_report.pkb
+   --
+   -- Design Reference
+   --
+   -- PROGRAM TYPE
+   --  Package Body
+   --
+   -- PURPOSE
+   --  Insert data in temp table for the employee to calculate
+   --  late coming early going deduction
+   --
+   -- HISTORY
+   -- ==================================================+
+   --  Version	ChangeID	Date    Author      Activity --
+   -- ==================================================+
+   --  1.0				20-Nov-2012 Sachin        Initial Version
+   --  1.1			    14-Aug-2018               SR177751 -  Added lookup XXOA_EXCLUD_LATE_EARLY_SECTION
+   --  1.2	     643    16-Sep-2018               SR190134 -  Modified the payroll period from first to end of the month
+   --  1.3       725    24-Feb-2019 Vignesh M    (SR-211619)Flexible Time policy implementation
+   --  1.4              14-APR-2019 Shalini K     SR 223979-LE exclusion is applicable for all staffs
+   --  1.5              08-MAY-2019 Shalini K     SR 226703-Included Ramadan Flexi time
+   --  1.6              04-Oct-2021 Deepak        SR 297464 - added logic for early going, if stop time is next day by so shift Deepak on 03-Oct-2021
+   --  1.7		        11-Nov-2024 Rishan	      SR 398109 Change in Late Coming Early Going deduction process program
+   --  1.8		        09-Dec-2025 Rishan	      SR 427279 Change in Late Coming Early Going deduction process program for excluding staff based on Job and Grade
+   --  1.9              29-Jun-2026 Sai vighnessh SR 441873 Changes in the calculations of Late Coming and Early Going Deductions for TRANSOM Cargo
+   -- ======================================================================================================================================================+
+   g_validate     BOOLEAN := FALSE;
+   g_user_id      NUMBER := fnd_profile.VALUE ('USER_ID');
+   g_login_id     NUMBER := fnd_profile.VALUE ('LOGIN_ID');
+   g_request_id   NUMBER := fnd_global.conc_request_id;
+   g_retcode      VARCHAR2 (10) := 0;
+   -- ----------------------------------------------------------------------------
+   -- This Procedure is used to write on Log file
+   -- ----------------------------------------------------------------------------
+   PROCEDURE LOG (pmessage VARCHAR2)
+   AS
+   BEGIN
+      fnd_file.put_line (fnd_file.LOG
+                        ,pmessage);
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         NULL;
+   END;
+   -- ----------------------------------------------------------------------------
+   -- This Procedure is used to write on Output file
+   -- ----------------------------------------------------------------------------
+   PROCEDURE out (pmessage VARCHAR2)
+   AS
+   BEGIN
+      fnd_file.put_line (fnd_file.output
+                        ,pmessage);
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         NULL;
+   END;
+   /*==========================================*/
+   /*This Procedure is used to Call DBMS Output*/
+   /*==========================================*/
+   PROCEDURE dbms (pmessage VARCHAR2)
+   AS
+   BEGIN
+      DBMS_OUTPUT.put_line (pmessage);
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         NULL;
+   END;
+   /*==========================================*/
+   /*This Procedure is used to Call inside FF  */
+   /*==========================================*/
+   -- Added for SR 190134 :: START
+    FUNCTION amount (
+        p_assg_id            IN NUMBER,
+        p_start_date         IN DATE,
+        p_end_date           IN DATE,
+        p_transaction_type   IN VARCHAR2
+    ) RETURN NUMBER IS
+        l_lceg_deduction_amount   NUMBER;
+    BEGIN
+            SELECT NVL(amount_deducted,0)
+            INTO l_lceg_deduction_amount
+            FROM
+              (SELECT
+                SUM(xeld.amount_deducted) amount_deducted
+            FROM
+                xxoa_early_late_deduction xeld,
+                per_all_assignments_f paaf
+            WHERE
+                    1 = 1
+                AND trunc(punch_date) BETWEEN paaf.effective_start_date AND paaf.effective_end_date
+                AND paaf.primary_flag = 'Y'
+                AND paaf.person_id = xeld.person_id
+                AND xeld.punch_date >= p_start_date
+                AND xeld.punch_date <= p_end_date
+                AND xeld.transaction_type = p_transaction_type
+                AND paaf.assignment_id = p_assg_id);
+
+            RETURN l_lceg_deduction_amount;
+    EXCEPTION
+        WHEN no_data_found THEN
+            RETURN 0;
+        WHEN too_many_rows THEN
+            RETURN 0;
+        WHEN OTHERS THEN
+            RETURN 0;
+    END amount;
+   -- Added for SR 190134 :: END
+   /*==========================================*/
+   /*             Main Procedure               */
+   /*==========================================*/
+   PROCEDURE main (retcode                 OUT NUMBER
+                  ,errbuf                  OUT VARCHAR2
+                  ,p_type               IN     VARCHAR2
+                  ,p_sbu                IN     NUMBER
+                  ,p_dept               IN     NUMBER
+                  ,p_sec                IN     NUMBER
+                  ,p_time_keeper_gr     IN     NUMBER
+                  ,p_person_id          IN     NUMBER
+                  ,p_payrol_id          IN     NUMBER
+                  ,p_payrol_period_id   IN     NUMBER
+                  ,p_override_flag      IN     VARCHAR2)
+   IS
+      CURSOR c_employee_list (
+         c_person_id     IN NUMBER
+        ,c_start_date    IN DATE
+        ,c_end_date      IN DATE
+        ,c_sbu           IN NUMBER
+        ,c_dept          IN NUMBER
+        ,c_sec           IN NUMBER
+        ,c_tk_group_id   IN NUMBER
+		,c_payroll_id    IN NUMBER) --- Added for SR 190134
+      IS
+         SELECT papf.person_id
+               ,paaf.assignment_id
+               ,papf.employee_number
+			   ,DECODE(papf.attribute2,'MUSLIM','Muslim','Non Muslim') religion -- Added for SR 226704
+         FROM   hxc_timecard_summary hts
+               ,per_all_people_f papf
+               ,per_all_assignments_f paaf
+               ,hr_all_organization_units hou
+         WHERE  papf.person_id = hts.resource_id
+         AND    papf.person_id = paaf.person_id
+         AND    papf.business_group_id = paaf.business_group_id
+         AND    paaf.primary_flag = 'Y'
+         AND    hou.organization_id = paaf.organization_id
+		 AND    paaf.payroll_id = c_payroll_id -- Added for SR 190134
+         AND    papf.person_id = NVL (c_person_id, papf.person_id)
+         AND    papf.business_group_id =
+                   fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID')
+         AND    TRUNC (hts.start_time) BETWEEN papf.effective_start_date
+                                           AND papf.effective_end_date
+         AND    TRUNC (hts.start_time) BETWEEN paaf.effective_start_date
+                                           AND paaf.effective_end_date
+         AND    hts.approval_status = 'APPROVED'
+      ---   AND    TRUNC (hts.start_time) BETWEEN c_start_date AND c_end_date commented for SR 190134
+	    AND c_start_date BETWEEN TRUNC (hts.start_time) AND TRUNC (hts.stop_time) -- Added For  SR 190134
+         AND    EXISTS
+                   (SELECT 1
+                    FROM   xxoa_pay_lee_values_v lee
+                    WHERE  UPPER (lee.element_name) LIKE
+                              UPPER ('%Late%Coming%Early%Going%Information%')
+                    AND    lee.business_group_id + 0 =
+                              fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID')
+                    AND    lee.person_id = papf.person_id
+                    AND    lee.effective_end_date >=
+                              NVL (TRUNC (c_end_date)
+                                  ,TO_DATE ('01-01-0001'
+                                           ,'DD-MM-YYYY'))
+                    AND    lee.effective_start_date <=
+                              NVL (TRUNC (c_end_date)
+                                  ,TO_DATE ('31-12-4712'
+                                           ,'DD-MM-YYYY')) /* Check current employee or exemployee. */
+                    AND    ( ('Y' = 'Y'
+                    AND       NVL (lee.current_employee_flag, 'N') = 'Y')
+                    OR       ('Y' = 'Y'
+                    AND       NVL (lee.current_employee_flag, 'N') = 'N'))
+                    /* Only returns the latest one for recurring entry. */
+                    AND    NOT EXISTS
+                                  (SELECT NULL
+                                   FROM   pay_element_entries_f pee
+                                   WHERE  pee.element_entry_id =
+                                             lee.element_entry_id
+                                   AND    pee.effective_start_date >
+                                             lee.effective_start_date
+                                   AND    pee.effective_end_date >=
+                                             NVL (TRUNC (c_end_date)
+                                                 ,TO_DATE ('01-01-0001'
+                                                          ,'DD-MM-YYYY'))
+                                   AND    pee.effective_start_date <=
+                                             NVL (TO_DATE (TRUNC (c_end_date)
+                                                          ,'DD-MM-YYYY')
+                                                 ,TO_DATE ('31-12-4712'
+                                                          ,'DD-MM-YYYY')))
+                    /* Custum restriction section */
+                    AND    ('' IS NOT NULL
+                    AND     ( (EXISTS
+                                  (SELECT 1
+                                   FROM   pay_restriction_values prv1
+                                         ,pay_element_set_members pesm1
+                                   WHERE  prv1.restriction_code =
+                                             'ELEMENT_SET'
+                                   AND    prv1.customized_restriction_id = ''
+                                   AND    prv1.VALUE =
+                                             TO_CHAR (pesm1.element_set_id)
+                                   AND    pesm1.element_type_id = 465
+                                   AND    pesm1.element_type_id =
+                                             lee.element_type_id))
+                    OR        (NOT EXISTS
+                                      (SELECT 1
+                                       FROM   pay_restriction_values prv1
+                                       WHERE  prv1.restriction_code =
+                                                 'ELEMENT_SET'
+                                       AND    prv1.customized_restriction_id =
+                                                 '')))
+                    AND     ( (EXISTS
+                                  (SELECT 1
+                                   FROM   pay_element_types_f pet2
+                                         ,pay_restriction_values prv1
+                                   WHERE  prv1.restriction_code =
+                                             'ELEMENT_TYPE'
+                                   AND    prv1.customized_restriction_id = ''
+                                   AND    prv1.VALUE = pet2.processing_type
+                                   AND    pet2.element_type_id =
+                                             lee.element_type_id
+                                   AND    pet2.element_type_id = 465
+                                   AND    TRUNC (c_end_date) BETWEEN pet2.
+                                                                      effective_start_date
+                                                                 AND pet2.
+                                                                      effective_end_date))
+                    OR        (NOT EXISTS
+                                      (SELECT 1
+                                       FROM   pay_restriction_values prv1
+                                       WHERE  prv1.restriction_code =
+                                                 'ELEMENT_TYPE'
+                                       AND    prv1.customized_restriction_id =
+                                                 '')))
+                    OR       ('' IS NULL)))
+         AND    paaf.person_id IN
+                   (SELECT htgqc.criteria_id
+                    FROM   hxc_tk_group_queries htgq
+                          ,hxc_tk_group_query_criteria htgqc
+                    WHERE  1 = 1 AND htgqc.criteria_type = 'PERSON'
+                    AND    htgq.tk_group_id =
+                              NVL (c_tk_group_id, htgq.tk_group_id)
+                    AND    htgq.tk_group_query_id = htgqc.tk_group_query_id)
+         AND    ( (c_sec IS NULL AND c_dept IS NULL AND c_sbu IS NULL)
+         OR       (EXISTS
+                      (SELECT     organization_id_child
+                       FROM       per_org_structure_elements str
+                       WHERE      organization_id_child = paaf.organization_id
+                       CONNECT BY str.organization_id_parent =
+                                     PRIOR str.organization_id_child
+                       AND        str.org_structure_version_id =
+                                     (SELECT organization_structure_id
+                                      FROM   per_organization_structures
+                                      WHERE  primary_structure_flag = 'Y')
+                       AND        str.business_group_id =
+                                     fnd_profile.
+                                      VALUE ('PER_BUSINESS_GROUP_ID')
+                       START WITH str.organization_id_child =
+                                     NVL (
+                                        (SELECT organization_id
+                                         FROM   hr_all_organization_units
+                                         WHERE  organization_id =
+                                                   NVL (NVL (c_sec, c_dept)
+                                                       ,c_sbu))
+                                       ,paaf.organization_id))));
+      CURSOR c_period (c_payrol_period_id IN NUMBER)
+      IS
+
+/*         SELECT TO_DATE ('15-'
+                         || TO_CHAR (p.start_date - 1
+                                    ,'MON-RRRR'))
+               ,TO_DATE ('14-'
+                         || TO_CHAR (p.end_date - 1
+                                    ,'MON-RRRR'))
+         FROM   per_time_periods p
+         WHERE  p.time_period_id = c_payrol_period_id;
+*/ --Commented for SR190134
+-- Added for SR 190134 :: START
+SELECT TO_DATE (START_DATE,'DD-MON-RRRR') start_date,
+					 TO_DATE (END_DATE,'DD-MON-RRRR') end_date
+			  FROM XXOAHR_LE_DEDUCTION p
+			 WHERE p.time_period_id = c_payrol_period_id;
+
+-- Added for SR 190134 :: END
+
+      v_start_date      DATE;
+      v_end_date        DATE;
+      v_assignment_id   NUMBER;
+      v_bg_id           NUMBER := fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID');
+      v_msg_out         VARCHAR2 (2000);
+      xml_layout        BOOLEAN;
+      v_request_id      NUMBER;
+      v_amount          NUMBER;
+   BEGIN
+      IF p_override_flag = 'Y'
+      THEN
+         OPEN c_period (c_payrol_period_id => p_payrol_period_id);
+         FETCH c_period
+         INTO v_start_date, v_end_date;
+         CLOSE c_period;
+         IF p_type = 'LATE_COMING'
+         THEN
+           /*  Commented for SR 190134
+		   DELETE FROM xxoa_early_late_deduction delrec
+            WHERE       EXISTS
+                           (SELECT 1
+                            FROM   xxoa_early_late_deduction xeld
+                                  ,per_all_people_f papf
+                                  ,per_all_assignments_f paaf
+                                  ,hr_all_organization_units hou
+                            WHERE  papf.person_id = xeld.person_id
+                            AND    papf.person_id = paaf.person_id
+                            AND    papf.business_group_id =
+                                      paaf.business_group_id
+                            AND    paaf.primary_flag = 'Y'
+                            AND    hou.organization_id = paaf.organization_id
+                            AND    papf.person_id = delrec.person_id
+                            AND    papf.business_group_id =
+                                      fnd_profile.
+                                       VALUE ('PER_BUSINESS_GROUP_ID')
+                            AND    TRUNC (xeld.punch_date) BETWEEN papf.
+                                                                    effective_start_date
+                                                               AND papf.
+                                                                    effective_end_date
+                            AND    TRUNC (xeld.punch_date) BETWEEN paaf.
+                                                                    effective_start_date
+                                                               AND paaf.
+                                                                    effective_end_date
+                            AND    xeld.period_id = delrec.period_id
+                            AND    xeld.transaction_type =
+                                      delrec.transaction_type
+                            AND    ( (p_sec IS NULL
+                            AND       p_dept IS NULL
+                            AND       p_sbu IS NULL)
+                            OR       (EXISTS
+                                         (SELECT     organization_id_child
+                                          FROM       per_org_structure_elements str
+                                          WHERE      organization_id_child =
+                                                        paaf.organization_id
+                                          CONNECT BY str.
+                                                      organization_id_parent =
+                                                        PRIOR str.
+                                                               organization_id_child
+                                          AND        str.
+                                                      org_structure_version_id =
+                                                        (SELECT organization_structure_id
+                                                         FROM   per_organization_structures
+                                                         WHERE  primary_structure_flag =
+                                                                   'Y')
+                                          AND        str.business_group_id =
+                                                        fnd_profile.
+                                                         VALUE (
+                                                           'PER_BUSINESS_GROUP_ID')
+                                          START WITH str.
+                                                      organization_id_child =
+                                                        NVL (
+                                                           (SELECT organization_id
+                                                            FROM   hr_all_organization_units
+                                                            WHERE  organization_id =
+                                                                      NVL (
+                                                                         NVL (
+                                                                            p_sec
+                                                                           ,p_dept)
+                                                                        ,p_sbu))
+                                                          ,paaf.
+                                                            organization_id)))))
+            AND         delrec.person_id =
+                           NVL (p_person_id, delrec.person_id)
+            AND         delrec.period_id = p_payrol_period_id               --Added for SR 190134
+            AND         delrec.punch_date between v_start_date and v_end_date --Added for SR 190134
+            AND         delrec.transaction_type = p_type
+            AND         delrec.person_id IN
+                           (SELECT htgqc.criteria_id
+                            FROM   hxc_tk_group_queries htgq
+                                  ,hxc_tk_group_query_criteria htgqc
+                            WHERE  1 = 1 AND htgqc.criteria_type = 'PERSON'
+                            AND    htgq.tk_group_id =
+                                      NVL (p_time_keeper_gr
+                                          ,htgq.tk_group_id)
+                            AND    htgq.tk_group_query_id =
+                                      htgqc.tk_group_query_id); */
+		-- Added for SR 190134 :: START
+		DELETE FROM xxoa_early_late_deduction delrec
+		 WHERE delrec.period_id = p_payrol_period_id
+		   AND delrec.punch_date BETWEEN v_start_date AND v_end_date
+           AND delrec.transaction_type = p_type ;
+		-- Added for SR 190134 :: END
+
+         ELSIF p_type = 'EARLY_GOING'
+         THEN
+           /* Commented for SR 190134
+		   DELETE FROM xxoa_early_late_deduction delrec
+            WHERE       EXISTS
+                           (SELECT 1
+                            FROM   xxoa_early_late_deduction xeld
+                                  ,per_all_people_f papf
+                                  ,per_all_assignments_f paaf
+                                  ,hr_all_organization_units hou
+                            WHERE  papf.person_id = xeld.person_id
+                            AND    papf.person_id = paaf.person_id
+                            AND    papf.business_group_id =
+                                      paaf.business_group_id
+                            AND    paaf.primary_flag = 'Y'
+                            AND    hou.organization_id = paaf.organization_id
+                            AND    papf.person_id = delrec.person_id
+                            AND    papf.business_group_id =
+                                      fnd_profile.
+                                       VALUE ('PER_BUSINESS_GROUP_ID')
+                            AND    TRUNC (xeld.punch_date) BETWEEN papf.
+                                                                    effective_start_date
+                                                               AND papf.
+                                                                    effective_end_date
+                            AND    TRUNC (xeld.punch_date) BETWEEN paaf.
+                                                                    effective_start_date
+                                                               AND paaf.
+                                                                    effective_end_date
+                            AND    xeld.period_id = delrec.period_id
+                            AND    xeld.transaction_type =
+                                      delrec.transaction_type
+                            AND    ( (p_sec IS NULL
+                            AND       p_dept IS NULL
+                            AND       p_sbu IS NULL)
+                            OR       (EXISTS
+                                         (SELECT     organization_id_child
+                                          FROM       per_org_structure_elements str
+                                          WHERE      organization_id_child =
+                                                        paaf.organization_id
+                                          CONNECT BY str.
+                                                      organization_id_parent =
+                                                        PRIOR str.
+                                                               organization_id_child
+                                          AND        str.
+                                                      org_structure_version_id =
+                                                        (SELECT organization_structure_id
+                                                         FROM   per_organization_structures
+                                                         WHERE  primary_structure_flag =
+                                                                   'Y')
+                                          AND        str.business_group_id =
+                                                        fnd_profile.
+                                                         VALUE (
+                                                           'PER_BUSINESS_GROUP_ID')
+                                          START WITH str.
+                                                      organization_id_child =
+                                                        NVL (
+                                                           (SELECT organization_id
+                                                            FROM   hr_all_organization_units
+                                                            WHERE  organization_id =
+                                                                      NVL (
+                                                                         NVL (
+                                                                            p_sec
+                                                                           ,p_dept)
+                                                                        ,p_sbu))
+                                                          ,paaf.
+                                                            organization_id)))))
+            AND         delrec.person_id =
+                           NVL (p_person_id, delrec.person_id)
+            AND         delrec.period_id = p_payrol_period_id                 --SR190134
+            AND         delrec.punch_date between v_start_date and v_end_date   --SR190134
+            AND         delrec.transaction_type = p_type
+            AND         delrec.person_id IN
+                           (SELECT htgqc.criteria_id
+                            FROM   hxc_tk_group_queries htgq
+                                  ,hxc_tk_group_query_criteria htgqc
+                            WHERE  1 = 1 AND htgqc.criteria_type = 'PERSON'
+                            AND    htgq.tk_group_id =
+                                      NVL (p_time_keeper_gr
+                                          ,htgq.tk_group_id)
+                            AND    htgq.tk_group_query_id =
+                                      htgqc.tk_group_query_id);*/
+
+	    -- Addded for SR 190134 :: START
+		DELETE FROM xxoa_early_late_deduction delrec
+		 WHERE delrec.period_id = p_payrol_period_id
+		   AND delrec.punch_date BETWEEN v_start_date AND v_end_date
+           AND delrec.transaction_type = p_type ;
+		-- Added for SR 190134 :: END
+
+         END IF;
+         IF SQL%NOTFOUND
+         THEN
+            LOG ('No Record Matched To Delete !');
+         ELSE
+            LOG ('Record Deleted Successfully !');
+            COMMIT;
+         END IF;
+      END IF;
+      IF p_override_flag = 'N'
+      THEN
+         OPEN c_period (c_payrol_period_id => p_payrol_period_id);
+         FETCH c_period
+         INTO v_start_date, v_end_date;
+         CLOSE c_period;
+         fnd_file.put_line (fnd_file.LOG
+                           ,' v_start_date ' || v_start_date);
+         fnd_file.put_line (fnd_file.LOG
+                           ,'v_end_date ' || v_end_date);
+
+         FOR rec IN c_employee_list (c_person_id     => p_person_id
+                                    ,c_start_date    => v_start_date
+                                    ,c_end_date      => v_end_date
+                                    ,c_sbu           => p_sbu
+                                    ,c_dept          => p_dept
+                                    ,c_sec           => p_sec
+                                    ,c_tk_group_id   => p_time_keeper_gr
+									,c_payroll_id    => p_payrol_id)  -- Added for SR 190134
+         LOOP
+            IF p_type = 'LATE_COMING'
+            THEN
+               BEGIN
+
+                  v_amount      := late_early_ded_amt (
+                                      p_bg_id           => v_bg_id
+                                     ,p_assignment_id   => rec.assignment_id
+                                     ,p_period_id       => p_payrol_period_id
+                                     ,p_start_date      => v_start_date
+                                     ,p_end_date        => v_end_date
+									 ,p_religion        => rec.religion  -- Added for SR 226703
+                                     ,p_msg_out         => v_msg_out);
+               EXCEPTION
+                  WHEN OTHERS
+                  THEN
+                     LOG (
+                        'Exception : Employee Number : '
+                        || rec.employee_number);
+                     LOG ('------------------------------------------------');
+                     LOG ('Error Message : ' || SQLERRM);
+               END;
+            ELSIF p_type = 'EARLY_GOING'
+            THEN
+               BEGIN
+
+                  v_amount      := early_ded_amt (
+                                      p_bg_id           => v_bg_id
+                                     ,p_assignment_id   => rec.assignment_id
+                                     ,p_period_id       => p_payrol_period_id
+                                     ,p_start_date      => v_start_date
+                                     ,p_end_date        => v_end_date
+									 ,p_religion        => rec.religion  -- Added for SR 226703
+                                     ,p_msg_out         => v_msg_out);
+               EXCEPTION
+                  WHEN OTHERS
+                  THEN
+                     LOG (
+                        'Exception : Employee Number : '
+                        || rec.employee_number);
+                     LOG ('------------------------------------------------');
+                     LOG ('Error Message : ' || SQLERRM);
+               END;
+            END IF;
+         END LOOP;
+         COMMIT;
+      END IF;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         retcode   := 2;
+         errbuf    := SQLERRM;
+         LOG ('Exception : ' || SQLERRM);
+   END;
+   -- ----------------------------------------------------------------------------
+   -- Main Function to process Late Coming And Early Going Deduction
+   -- ----------------------------------------------------------------------------
+   FUNCTION late_early_ded_amt (p_bg_id           IN     NUMBER
+                               ,p_assignment_id   IN     NUMBER
+                               ,p_period_id       IN     NUMBER
+                               ,p_start_date      IN     DATE
+                               ,p_end_date        IN     DATE
+							   ,p_religion        IN     VARCHAR2  -- Added for SR 226703
+                               ,p_msg_out            OUT VARCHAR2)
+      RETURN NUMBER
+   AS
+      e_val_err                EXCEPTION;
+      e_val_param_err          EXCEPTION;
+      v_err_msg                VARCHAR2 (1000);
+      v_shift_name             VARCHAR2 (100);
+      v_end_date               DATE;
+      v_start_date             DATE;
+      v_date                   DATE;
+      v_count                  NUMBER;
+      v_hours                  NUMBER;
+      v_eff_date               DATE;
+      v_out_eff_start_dt       DATE;
+      v_out_eff_end_dt         DATE;
+      v_out_elem_entry_id      NUMBER;
+      v_out_ovn                NUMBER;
+      v_out_create_warn        BOOLEAN;
+      v_elem_name              pay_element_types_f.element_name%TYPE;
+      v_elem_type_id           NUMBER;
+      v_elem_link_id           NUMBER;
+      v_inp_val_id             NUMBER;
+      v_dual_shift_all         NUMBER;
+      v_mult_shift_all         NUMBER;
+      v_allowance_amount       NUMBER;
+      v_elig_min_days          NUMBER;
+      v_sh_start_time          NUMBER;
+      v_sh_stop_time           NUMBER;
+      v_sh_start_time_st       VARCHAR2 (10);
+      v_sh_stop_time_st        VARCHAR2 (30);
+      v_act_start_time         NUMBER;
+      v_act_stop_time          NUMBER;
+      v_holiday_cnt            NUMBER;
+      v_amount                 NUMBER := 0;
+      v_basic_sal              NUMBER;
+      v_ded_perc               NUMBER;
+      v_occurence              NUMBER;
+      v_person_id              NUMBER;
+      v_start_time_diff        NUMBER;
+      v_stop_time_diff         NUMBER;
+      v_days                   NUMBER;
+      v_act_start_time_st      VARCHAR2 (10);
+      v_act_stop_time_st       VARCHAR2 (10);
+      v_msg                    VARCHAR2 (500);
+      v_grace_time             NUMBER;
+      v_grace_attempt          NUMBER;
+      ---
+      v_sh_start_time_st_dt    DATE;
+      v_sh_stop_time_st_dt     DATE;
+      v_act_start_time_st_dt   DATE;
+      v_act_stop_time_st_dt    DATE;
+      v_1_min_basic_sal        NUMBER;
+      v_total_shift_hours      NUMBER;
+      v_total_actual_hours     NUMBER;
+      v_deduction_flag         VARCHAR2 (1);
+      l_flag                   VARCHAR2 (1);
+      v_employee_number        VARCHAR2 (140);
+      v_record_exist           NUMBER;
+      v_insert                 VARCHAR2 (1);
+      v_occurence_rep          NUMBER;
+   ---
+      lc_admin_plan_yn          varchar2(1);         --Added for SR-211619
+      lc_late_deduction_yn      varchar2(1);         --Added for SR-211619
+      lc_late_deduction_mins    number;              --Added for SR-211619
+      lc_calculation_type       varchar2(30);        --Added for SR-211619
+	  c_chk_shift				NUMBER;--Added for SR 398109
+	  v_occurence_no            NUMBER;  --Added for SR 441873
+	  v_multiplier              NUMBER; --Added for SR 441873
+   BEGIN
+      v_date            := p_start_date;
+      v_count           := 0;
+      v_occurence       := 1;
+      v_occurence_rep   := 0;
+      v_basic_sal       := 0;
+      v_msg             := ' ';
+      LOOP
+         EXIT WHEN v_date > p_end_date;
+         v_amount   := 0;
+         --Added for SR-211619 Starts
+         lc_admin_plan_yn := xxoa_hr_late_early_ded_rep_new.is_admin_rotation_plan_yn(p_assignment_id,v_date,p_religion);  --- Added for SR 226703
+         log('lc_admin_plan_yn-->'||lc_admin_plan_yn);
+         if lc_admin_plan_yn = 'Y' then
+            lc_calculation_type := 'FLEXI';
+         elsif lc_admin_plan_yn = 'N' then
+            lc_calculation_type := 'GRACE';
+         end if;
+         log('lc_calculation_type-->'||lc_calculation_type);
+         --Added for SR-211619 Ends
+         /*=================*/
+         /*Derive Person Id */
+         /*=================*/
+         BEGIN
+
+
+            SELECT papf.person_id
+                  ,papf.employee_number
+            INTO   v_person_id
+                  ,v_employee_number
+            FROM   per_all_people_f papf
+                  ,per_all_assignments_f paaf
+				  ,per_grades pg ,per_jobs pj --added job and grade details for SR 427279
+            WHERE  1 = 1
+            AND    papf.person_id = paaf.person_id
+            AND    paaf.assignment_id = p_assignment_id
+            AND    paaf.primary_flag = 'Y'
+            AND    v_date BETWEEN papf.effective_start_date
+                              AND papf.effective_end_date
+            AND    v_date BETWEEN paaf.effective_start_date
+                              AND paaf.effective_end_date
+			and   paaf.job_id = pj.job_id
+            and   paaf.grade_id = pg.grade_id
+            AND    v_date between pg.date_from  and nvl(pg.date_to,to_date('31-Dec-4712'))
+            AND    v_date between pj.date_from  and nvl(pj.date_to,to_date('31-Dec-4712'))
+	        /* Commented For SR 177751 :: START
+            AND    EXISTS
+                      (SELECT 1
+                       FROM   fnd_lookup_values_vl
+                       WHERE  lookup_type = 'XXOA_RUN_LATE_EARLY_DEDUCT_ORG'
+                       AND    enabled_flag = 'Y'
+                       AND    meaning =
+                                 (SELECT name
+                                  FROM   hr_all_organization_units
+                                  WHERE  TYPE = 'SE'
+                                  AND    organization_id =
+                                            paaf.organization_id))
+			Commented For SR 177751 :: END */
+            AND   NOT  EXISTS
+                      (SELECT 1
+                       FROM   fnd_lookup_values_vl
+                       WHERE  lookup_type = 'XXOA_EXCLUD_LATE_EARLY_SECTION'
+                       AND    enabled_flag = 'Y'
+                       AND    meaning =
+                                 (SELECT name
+                                  FROM   hr_all_organization_units
+                                  WHERE  TYPE = 'SE'
+                                  AND    organization_id =
+                                            paaf.organization_id)
+                      --  and lc_admin_plan_yn = 'N' --Added for SR-211619 Commented For 223979
+                        )
+			-- Added for SR 177751 :: END
+            AND    NOT EXISTS
+                          (SELECT 1
+                           FROM   fnd_lookup_values_vl
+                           WHERE  lookup_type =
+                                     'XXOA_EXCLUDE_LATE_EARLY_DEDUCT'
+                           AND    enabled_flag = 'Y'
+                           AND    meaning = papf.employee_number
+                         --  and lc_admin_plan_yn = 'N'                        --Added for SR-211619  Commented For 223979
+                           )
+						   ----added for SR427279------
+			AND    NOT EXISTS
+                          (SELECT 1
+                           FROM   fnd_lookup_values_vl
+                           WHERE  lookup_type =
+                                     'XXOA_EXCL_JOB_LATE_EARLY_DED'
+                           AND    enabled_flag = 'Y'
+                           AND    meaning = pj.name
+						    AND v_date BETWEEN start_date_active
+								AND NVL(end_date_active,'31-DEC-4712')
+                           )
+			AND    NOT EXISTS
+                          (SELECT 1
+                           FROM   fnd_lookup_values_vl
+                           WHERE  lookup_type =
+                                     'XXOA_EXCL_GRADE_LATE_EARLY_DED'
+                           AND    enabled_flag = 'Y'
+                           AND    meaning = pg.name
+						   AND v_date BETWEEN start_date_active
+								AND NVL(end_date_active,'31-DEC-4712')
+                           );
+							  ----END : added for SR427279------
+
+         EXCEPTION
+            WHEN NO_DATA_FOUND
+            THEN
+               v_person_id   := NULL;
+            WHEN TOO_MANY_ROWS
+            THEN
+               v_person_id   := NULL;
+            WHEN OTHERS
+            THEN
+               v_person_id   := NULL;
+         END;
+         log ('v_person_id : ' || v_person_id);
+         IF v_person_id IS NOT NULL
+         THEN
+            /*====================================*/
+            /*Derive Shift Name and Holiday Count */
+            /*====================================*/
+            v_shift_name       := xxoa_otl_get_shift_name_fns (v_person_id
+                                                              ,v_date
+                                                              ,'NAME');
+            v_holiday_cnt      := xxoa_otl_check_holiday_fns (v_person_id
+                                                             ,v_date);
+            log ('v_shift_name : ' || v_shift_name);
+            log ('v_holiday_cnt: ' || v_holiday_cnt);
+		----added for SR 398109---
+		Begin
+        c_chk_shift:=0;
+         SELECT count(1) into c_chk_shift
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_OTL_LATE_EARLY_SHIFT_EXCL'
+         AND flv.enabled_flag  ='Y'
+         AND v_date BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712')
+         AND Upper(Meaning) = Upper(v_shift_name);
+         Exception when others then
+         c_chk_shift:=0;
+        End;
+
+		 log ('c_chk_shift: ' || c_chk_shift);
+----End for SR 398109---
+
+       --     IF UPPER (v_shift_name) NOT LIKE '%OFF%' AND v_holiday_cnt = 0 ----commented for SR 398109
+			IF c_chk_shift <> 1  AND v_holiday_cnt = 0 ----added for SR 398109
+            THEN
+               /*================================*/
+               /*Derive Shift Start And End Time */
+               /*================================*/
+               v_sh_start_time_st_dt      := TO_DATE (
+                                                TO_CHAR (v_date
+                                                        ,'MM/DD/RRRR')
+                                                || LPAD (
+                                                      xxoa_otl_get_shift_name_fns (
+                                                         v_person_id
+                                                        ,v_date
+                                                        ,'START_TIME')
+                                                     ,'4'
+                                                     ,'0')
+                                               ,'MM/DD/RRRRHH24MI');
+               v_sh_stop_time_st_dt       := TO_DATE (
+                                                TO_CHAR (v_date
+                                                        ,'MM/DD/RRRR')
+                                                || LPAD (
+                                                      xxoa_otl_get_shift_name_fns (
+                                                         v_person_id
+                                                        ,v_date
+                                                        ,'STOP_TIME')
+                                                     ,'4'
+                                                     ,'0')
+                                               ,'MM/DD/RRRRHH24MI');
+               v_sh_start_time_st         := LPAD (
+                                                xxoa_otl_get_shift_name_fns (
+                                                   v_person_id
+                                                  ,v_date
+                                                  ,'START_TIME')
+                                               ,'4'
+                                               ,'0');
+               v_sh_stop_time_st          := LPAD (
+                                                xxoa_otl_get_shift_name_fns (
+                                                   v_person_id
+                                                  ,v_date
+                                                  ,'STOP_TIME')
+                                               ,'4'
+                                               ,'0');
+               /* Added logic by transsys to get correct stop time */
+               IF v_sh_start_time_st_dt > v_sh_stop_time_st_dt
+               THEN
+                  v_sh_stop_time_st_dt   := v_sh_stop_time_st_dt + 1;
+               /*      TO_DATE (   TO_CHAR (v_date + 1, 'MM/DD/RRRR')
+                              || LPAD (xxoa_otl_get_shift_name_fns (v_person_id,
+                                                                    v_date + 1,
+                                                                    'STOP_TIME'
+                                                                   ),
+                                       '4',
+                                       '0'
+                                      ),
+                              'MM/DD/RRRRHH24MI'
+                             );  */
+               END IF;
+               /* Added logic by Transsys to get correct stop time */
+               log ('v_sh_start_time_st_dt : ' || v_sh_start_time_st_dt);
+               log ('v_sh_stop_time_st_dt : ' || v_sh_stop_time_st_dt);
+               log ('v_sh_start_time_st : ' || v_sh_start_time_st);
+               log ('v_sh_stop_time_st : ' || v_sh_stop_time_st);
+               /*=====================================*/
+               /*Derive the Actual start and end Time */
+               /*=====================================*/
+               BEGIN
+                  v_act_start_time_st   := '0';
+                  v_act_stop_time_st    := '0';
+                  SELECT LPAD (TO_CHAR (MIN (xxtc.start_time)
+                                       ,'HH24MI')
+                              ,'4'
+                              ,'0')
+                        ,LPAD (TO_CHAR (MAX (xxtc.stop_time)
+                                       ,'HH24MI')
+                              ,'4'
+                              ,'0')
+                        ,MIN (xxtc.start_time)
+                        ,MAX (xxtc.stop_time)
+                  INTO   v_act_start_time_st
+                        ,v_act_stop_time_st
+                        ,v_act_start_time_st_dt
+                        ,v_act_stop_time_st_dt
+                  FROM   xxoa_otl_time_card_detail_v xxtc
+                  WHERE  1 = 1
+                  AND    xxtc.resource_id = v_person_id
+                  AND    TRUNC (xxtc.punch_date) = v_date
+                  AND    xxtc.approval_status = 'APPROVED';
+               EXCEPTION
+                  WHEN OTHERS
+                  THEN
+                     v_act_start_time_st      := '0';
+                     v_act_stop_time_st       := '0';
+                     v_act_start_time_st_dt   := NULL;
+                     v_act_stop_time_st_dt    := NULL;
+               END;
+               log ('v_act_start_time_st : ' || v_act_start_time_st);
+               log ('v_act_stop_time_st : ' || v_act_stop_time_st);
+               log ('v_act_start_time_st_dt : ' || v_act_start_time_st_dt);
+               log ('v_act_stop_time_st_dt : ' || v_act_stop_time_st_dt);
+               /*===========================*/
+               /*Derive Total Working Hours */
+               /*===========================*/
+               v_total_shift_hours        := 24
+                                             * (v_sh_stop_time_st_dt
+                                                - v_sh_start_time_st_dt);
+               v_total_actual_hours       := 24
+                                             * (v_act_stop_time_st_dt
+                                                - v_act_start_time_st_dt);
+               log ('v_total_shift_hours : ' || v_total_shift_hours);
+               log ('v_total_actual_hours : ' || v_total_actual_hours);
+               /*==============================*/
+               /*Convert Shift Start in minutes*/
+               /*==============================*/
+               IF v_sh_start_time_st = '0'
+               THEN
+                  v_sh_start_time   := 0;
+               ELSE
+                  v_sh_start_time      := (SUBSTR (v_sh_start_time_st
+                                                  ,1
+                                                  ,2)
+                                           * 60)
+                                          + SUBSTR (v_sh_start_time_st
+                                                   ,-2);
+               END IF;
+               log ('v_sh_start_time : ' || v_sh_start_time);
+               /*===============================*/
+               /*Convert Actual Start in minutes*/
+               /*===============================*/
+               IF v_act_start_time_st = '0'
+               THEN
+                  v_act_start_time   := 0;
+               ELSE
+                  v_act_start_time      := (SUBSTR (v_act_start_time_st
+                                                   ,1
+                                                   ,2)
+                                            * 60)
+                                           + SUBSTR (v_act_start_time_st
+                                                    ,-2);
+               END IF;
+               log ('v_act_start_time : ' || v_act_start_time);
+               /*==========================================================*/
+               /*Calcualte the time difference between actual and scheduled*/
+               /*==========================================================*/
+
+
+               --Commented by Transsys to handle cases having shift start time 00:00 and employee comes early ex 23:50
+               /*
+               IF v_act_start_time = 0
+               THEN
+                  v_start_time_diff   := 9999;
+               ELSE
+                  v_start_time_diff   := v_act_start_time - v_sh_start_time;
+               END IF;*/
+
+               v_start_time_diff   := abs(v_act_start_time - v_sh_start_time);
+
+               log ('v_start_time_diff : ' || v_start_time_diff);
+
+
+               /*=================================================*/
+               /*Global Values for Grace Time and allowed Attempts*/
+               /*=================================================*/
+               BEGIN
+                  SELECT global_value
+                  INTO   v_grace_time
+                  FROM   ff_globals_f
+                  WHERE  global_name = 'XXOA_LATE_COME_GRACE_TIME'
+                  AND    SYSDATE BETWEEN effective_start_date
+                                     AND effective_end_date
+                  AND    business_group_id =
+                            fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID');
+               END;
+               BEGIN
+                  SELECT global_value
+                  INTO   v_grace_attempt
+                  FROM   ff_globals_f
+                  WHERE  global_name = 'XXOA_LATE_COME_GRACE_ATTEMPT'
+                  AND    SYSDATE BETWEEN effective_start_date
+                                     AND effective_end_date
+                  AND    business_group_id =
+                            fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID');
+               END;
+               dbms ('v_grace_time : ' || v_grace_time);
+               dbms ('v_grace_attempt : ' || v_grace_attempt);
+               /*==========================*/
+               /*Basic Salary For a Minut */
+               /*=========================*/
+               v_basic_sal                := xxoa_payroll_all.
+                                              get_basic_salary (
+                                                p_bg_id
+                                               ,p_assignment_id
+                                               ,v_date);
+               v_days                     :=   TRUNC (LAST_DAY (p_end_date))
+                                             - TRUNC (p_end_date
+                                                     ,'MM')
+                                             + 1;
+               v_1_min_basic_sal          := (v_basic_sal * 12)
+                                             / (60
+                                                * (240 * v_total_shift_hours));
+               dbms ('v_basic_sal : ' || v_basic_sal);
+               dbms ('v_days : ' || v_days);
+               dbms ('v_1_min_basic_sal : ' || v_1_min_basic_sal);
+               /*===============================*/
+               /*Derive Conditions as per policy*/
+               /*===============================*/
+               /* Commented by Venkat on 18 Dec 2015
+               IF v_act_start_time_st_dt > v_sh_start_time_st_dt
+               THEN
+                  v_occurence_rep   := v_occurence_rep + 1;
+                  dbms ('v_occurence_rep : ' || v_occurence_rep);
+                  LOG ('v_occurence_rep : ' || v_occurence_rep);
+                  IF v_start_time_diff <= v_grace_time
+                  THEN
+                     IF v_occurence > v_grace_attempt
+                     THEN
+                        v_deduction_flag   := 'Y';
+                     ELSE
+                        IF v_total_actual_hours >= v_total_shift_hours
+                        THEN
+                           v_deduction_flag   := 'N';
+                           dbms ('v_occurence : ' || v_occurence);
+                           LOG ('v_occurence : ' || v_occurence);
+                           v_occurence        := v_occurence + 1;
+                        ELSE
+                           v_deduction_flag   := 'Y';
+                        END IF;
+                     END IF;
+                  ELSE
+                     v_deduction_flag   := 'Y';
+                  END IF;
+                  dbms ('v_deduction_flag : ' || v_deduction_flag);
+                  LOG ('v_deduction_flag : ' || v_deduction_flag);
+                 Commented by Venkat */
+                 /* Added by Venkat to fix Late coming Grace Issue */
+                 IF (
+                     (v_act_start_time_st_dt > v_sh_start_time_st_dt and lc_admin_plan_yn = 'N')        --Added for SR-211619
+                      or                                                                                --Added for SR-211619
+                     (v_act_start_time_st_dt >= v_sh_start_time_st_dt and lc_admin_plan_yn = 'Y')       --Added forSR-211619
+                     )
+               THEN
+                  --v_occurence_rep := v_occurence_rep + 1;           --Commented for SR-211619
+                  --dbms ('v_occurence_rep : ' || v_occurence_rep);   --Commented for SR-211619
+    --Added for SR-211619 Starts
+                 if lc_admin_plan_yn = 'Y' then
+                    lc_late_deduction_yn := xxoa_hr_late_early_ded_rep_new.get_flexi_late_early_dtls(p_assignment_id,v_date
+                                                                                                    ,v_sh_start_time_st_dt,v_sh_stop_time_st_dt
+                                                                                                    ,v_act_start_time_st_dt,v_act_stop_time_st_dt
+                                                                                                    ,'LATE_DEDUCTION_YN'
+                                                                                                    );
+                    v_deduction_flag := lc_late_deduction_yn;
+                    if v_deduction_flag = 'Y' then
+                      v_occurence_rep := v_occurence_rep + 1;
+                      dbms ('v_occurence_rep : ' || v_occurence_rep);
+                    end if;
+
+                 elsif lc_admin_plan_yn = 'N' then
+                      v_occurence_rep := v_occurence_rep + 1;
+                      dbms ('v_occurence_rep : ' || v_occurence_rep);
+    --Added for SR-211619 Ends
+                  IF v_start_time_diff <= v_grace_time
+                  THEN
+                     IF v_occurence > v_grace_attempt
+                     THEN
+                        v_deduction_flag := 'Y';
+                     ELSE
+                        IF v_total_actual_hours >= v_total_shift_hours
+                        THEN
+                           v_deduction_flag := 'N';
+                           dbms ('v_occurence : ' || v_occurence);
+                           v_occurence := v_occurence + 1;
+                        ELSE
+                           v_deduction_flag := 'Y';
+                        END IF;
+                     END IF ;
+                  ELSE
+                     v_deduction_flag := 'Y';
+                  END IF;
+               end if;          --Added for SR-211619
+/*=============================================*/
+/*  Derive Conditions as per policy           */
+/*On Leave Date if Emp is late/Early going  */
+/*then there should not be any deduction*/
+/*=============================================*/
+/* Added By Sameer Patil(ACL) Start here */
+                  BEGIN
+                     SELECT 'Y'
+                       INTO l_flag
+                       FROM per_absence_attendances a
+                      WHERE a.person_id = v_person_id
+                        AND TRUNC (v_date) BETWEEN TRUNC (a.date_start)
+                                               AND TRUNC (a.date_end);
+                  EXCEPTION
+                     WHEN OTHERS
+                     THEN
+                        l_flag := 'N';
+                  END;
+
+                  IF l_flag = 'Y'
+                  THEN
+                     v_deduction_flag := 'N';
+                  END IF;
+                 /* Added by Venkat to fix Late coming Grace Issue */
+                 log('v_deduction_flag-->'||v_deduction_flag);
+                 IF v_deduction_flag = 'N'
+                  THEN
+                     v_msg      :=    'Punch Date : '
+                                   || TO_CHAR (v_date
+                                              ,'DD-MON-RRRR')
+                                   || ' Number of occurence : '
+                                   || v_occurence_rep
+                                   || ' Number of grace attempt used : '
+                                   || v_occurence
+                                   || ' Late by (Min) : '
+                                   || v_start_time_diff
+                                   || ' Amount Deducted : '
+                                   || TO_CHAR (v_amount
+                                              ,'99900.99')
+                                   || ' Calculation Type : '       --Added for SR-211619
+                                   || lc_calculation_type;         --Added for SR-211619
+                     LOG (v_msg);
+                  ELSIF v_deduction_flag = 'Y'
+                  THEN
+                   log('lc_admin_plan_yn-->'||lc_admin_plan_yn);
+                     --Added for SR-211619 Starts
+                      if lc_admin_plan_yn = 'Y' then
+                          log('Inside admin block');
+                          lc_late_deduction_mins := xxoa_hr_late_early_ded_rep_new.get_flexi_late_early_dtls(p_assignment_id,v_date
+                                                                                                          ,v_sh_start_time_st_dt,v_sh_stop_time_st_dt
+                                                                                                          ,v_act_start_time_st_dt,v_act_stop_time_st_dt
+                                                                                                          ,'LATE_DEDUCTION_MINS'
+                                                                                                          );
+                           log('lc_late_deduction_mins-->'||lc_late_deduction_mins);
+                           v_start_time_diff := abs(lc_late_deduction_mins);
+                      end if;
+                     --Added for SR-211619 Ends
+
+					 --Added for SR 441873 Starts
+					 BEGIN
+                     SELECT COUNT (1) + 1
+                     INTO   v_occurence_no
+                     FROM   xxoa_early_late_deduction
+                     WHERE  person_id = v_person_id
+					 AND    period_id = p_period_id
+                     AND    TRUNC (punch_date) < TRUNC (v_date)
+                     AND    transaction_type = 'LATE_COMING';
+					 EXCEPTION
+					   WHEN OTHERS THEN
+					        v_occurence_no :=1;
+                     END;
+
+					 IF v_occurence_no <= 2 THEN
+					    v_multiplier:=0;
+					 ELSIF v_occurence_no <= 3 THEN
+					    v_multiplier:=1;
+					 ELSIF v_occurence_no <= 4 THEN
+					    v_multiplier:=1.5;
+					 ELSIF v_occurence_no <= 5 THEN
+					    v_multiplier:=2;
+					 ELSE
+					    v_multiplier:=2.5;
+					 END IF;
+
+					 log('Occurence number:'||v_occurence_no);
+					 log('Multiplier:'||v_multiplier);
+
+					 --Added for SR 441873 Ends
+
+                     v_amount      := ROUND (
+                                         (v_1_min_basic_sal
+                                          * v_start_time_diff
+										  * v_multiplier)        --Added for SR 441873
+                                        ,3);
+                     v_msg         :=    'Punch Date : '
+                                      || TO_CHAR (v_date
+                                                 ,'DD-MON-RRRR')
+                                      || ' Number of occurence : '
+                                      || v_occurence_rep
+                                      || ' Number of grace attempt used : '
+                                      || v_occurence
+                                      || ' Late by (Min) : '
+                                      || v_start_time_diff
+                                      || ' Amount Deducted : '
+                                      || TO_CHAR (v_amount
+                                                 ,'99900.99')
+                                      || ' Calculation Type : '       --Added for SR-211619
+                                      || lc_calculation_type;         --Added for SR-211619
+                     LOG (v_msg);
+                  END IF;
+                  dbms ('v_msg : ' || v_msg);
+                  dbms ('v_amount : ' || v_amount);
+                  v_record_exist    := 0;
+                  v_insert          := 'N';
+                  BEGIN
+                     SELECT COUNT (1)
+                     INTO   v_record_exist
+                     FROM   xxoa_early_late_deduction
+                     WHERE  person_id = v_person_id
+                     AND    TRUNC (punch_date) = TRUNC (v_date)
+                     AND    transaction_type = 'LATE_COMING';
+                  END;
+                  IF v_record_exist > 0
+                  THEN
+                     v_insert   := 'N';
+                     LOG (
+                           'Record Already Exist For Employee : '
+                        || v_employee_number
+                        || ' For Date : '
+                        || v_date);
+                  ELSE
+                     IF ((lc_admin_plan_yn = 'Y' and v_deduction_flag = 'Y') or lc_admin_plan_yn = 'N') then    --Added for SR-211619
+                         v_insert   := 'Y';
+                     END IF;                                                                                        --Added for SR-211619
+                  END IF;
+                  IF v_insert = 'Y'
+                  THEN
+                     BEGIN
+                        INSERT
+                        INTO   xxoa_early_late_deduction (transaction_type
+                                                         ,period_id
+                                                         ,person_id
+                                                         ,punch_date
+                                                         ,sh_start_time
+                                                         ,sh_end_time
+                                                         ,act_start_time
+                                                         ,act_end_time
+                                                         ,late_hour_time_cnt
+                                                         ,no_of_occurence
+                                                         ,amount_deducted
+                                                         ,MESSAGE
+                                                         ,grace_attempt_used)
+                        VALUES ('LATE_COMING'
+                               ,p_period_id
+                               ,v_person_id
+                               ,v_date
+                               ,v_sh_start_time_st
+                               ,v_sh_stop_time_st
+                               ,v_act_start_time_st
+                               ,v_act_stop_time_st
+                               ,v_start_time_diff
+                               ,v_occurence_rep
+                               ,v_amount
+                               ,v_msg
+                            --,v_occurence                                      --Commented for SR 190134
+                               ,decode(lc_admin_plan_yn,'Y',0,v_occurence));    --Added for SR 190134
+                        COMMIT;
+                        LOG (
+                              'Record Inserted For Employee : '
+                           || v_employee_number
+                           || ' For Punch Date : '
+                           || v_date);
+                     EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                           LOG (
+                                 'Insert Record Faild For Employee : '
+                              || v_employee_number
+                              || ' For Punch Date : '
+                              || v_date);
+                     END;
+                  END IF;
+               END IF;
+            END IF;
+         END IF;
+         v_date     := v_date + 1;
+      END LOOP;
+      p_msg_out         := v_msg;
+      RETURN v_amount;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         RETURN 0;
+   END;
+   -------------------------------
+   FUNCTION early_ded_amt (p_bg_id           IN     NUMBER
+                          ,p_assignment_id   IN     NUMBER
+                          ,p_period_id       IN     NUMBER
+                          ,p_start_date      IN     DATE
+                          ,p_end_date        IN     DATE
+						  ,p_religion        IN     VARCHAR2 -- Added for SR 226703
+                          ,p_msg_out            OUT VARCHAR2)
+      RETURN NUMBER
+   AS
+      e_val_err                EXCEPTION;
+      e_val_param_err          EXCEPTION;
+      v_err_msg                VARCHAR2 (1000);
+      v_shift_name             VARCHAR2 (100);
+      v_end_date               DATE;
+      v_start_date             DATE;
+      v_date                   DATE;
+      v_count                  NUMBER;
+      v_hours                  NUMBER;
+      v_eff_date               DATE;
+      v_out_eff_start_dt       DATE;
+      v_out_eff_end_dt         DATE;
+      v_out_elem_entry_id      NUMBER;
+      v_out_ovn                NUMBER;
+      v_out_create_warn        BOOLEAN;
+      v_elem_name              pay_element_types_f.element_name%TYPE;
+      v_elem_type_id           NUMBER;
+      v_elem_link_id           NUMBER;
+      v_inp_val_id             NUMBER;
+      v_dual_shift_all         NUMBER;
+      v_mult_shift_all         NUMBER;
+      v_allowance_amount       NUMBER;
+      v_elig_min_days          NUMBER;
+      v_sh_start_time          NUMBER;
+      v_sh_stop_time           NUMBER;
+      v_sh_start_time_st       VARCHAR2 (10);
+      v_sh_stop_time_st        VARCHAR2 (10);
+      v_act_start_time         NUMBER;
+      v_act_stop_time          NUMBER;
+      v_holiday_cnt            NUMBER;
+      v_amount                 NUMBER := 0;
+      v_basic_sal              NUMBER;
+      v_ded_perc               NUMBER;
+      v_occurence              NUMBER;
+      v_person_id              NUMBER;
+      v_start_time_diff        NUMBER;
+      v_stop_time_diff         NUMBER;
+      v_days                   NUMBER;
+      v_act_start_time_st      VARCHAR2 (10);
+      v_act_stop_time_st       VARCHAR2 (10);
+      v_msg                    VARCHAR2 (500);
+      v_grace_time             NUMBER;
+      v_grace_attempt          NUMBER;
+      ---
+      v_sh_start_time_st_dt    DATE;
+      v_sh_stop_time_st_dt     DATE;
+      v_act_start_time_st_dt   DATE;
+      v_act_stop_time_st_dt    DATE;
+      v_1_min_basic_sal        NUMBER;
+      v_total_shift_hours      NUMBER;
+      v_total_actual_hours     NUMBER;
+      v_deduction_flag         VARCHAR2 (1);
+      l_flag                   VARCHAR2 (1);
+      v_record_exist           NUMBER;
+      v_insert                 VARCHAR2 (1);
+      v_employee_number        VARCHAR2 (140);
+      v_occurence_rep          NUMBER;
+   ---
+      lc_admin_plan_yn          varchar2(1);        --Added for SR-211619
+      lc_early_deduction_yn     varchar2(1);        --Added for SR-211619
+      lc_early_deduction_mins   number;             --Added for SR-211619
+      lc_calculation_type       varchar2(30);       --Added for SR-211619
+	  c_chk_shift				NUMBER;			    --Added for SR-398109
+   BEGIN
+      v_date            := p_start_date;
+      v_count           := 0;
+      v_occurence       := 1;
+      v_occurence_rep   := 0;
+      v_basic_sal       := 0;
+      v_msg             := ' ';
+      LOOP
+         EXIT WHEN v_date > p_end_date;
+         v_amount   := 0;
+         --Added for SR-211619 Starts
+         lc_admin_plan_yn := xxoa_hr_late_early_ded_rep_new.is_admin_rotation_plan_yn(p_assignment_id,v_date,p_religion);  -- Added for SR 226703
+         if lc_admin_plan_yn = 'Y' then
+            lc_calculation_type := 'FLEXI';
+         elsif lc_admin_plan_yn = 'N' then
+            lc_calculation_type := 'GRACE';
+         end if;
+         /*=================*/
+         /*Derive Person Id */
+         /*=================*/
+         BEGIN
+            SELECT papf.person_id
+                  ,papf.employee_number
+            INTO   v_person_id
+                  ,v_employee_number
+            FROM   per_all_people_f papf
+                  ,per_all_assignments_f paaf
+				   ,per_grades pg ,per_jobs pj --added job and grade details for SR 427279
+            WHERE  1 = 1
+            AND    papf.person_id = paaf.person_id
+            AND    paaf.assignment_id = p_assignment_id
+            AND    paaf.primary_flag = 'Y'
+            AND    v_date BETWEEN papf.effective_start_date
+                              AND papf.effective_end_date
+            AND    v_date BETWEEN paaf.effective_start_date
+                              AND paaf.effective_end_date
+			and   paaf.job_id = pj.job_id
+            and   paaf.grade_id = pg.grade_id
+            AND    v_date between pg.date_from  and nvl(pg.date_to,to_date('31-Dec-4712'))
+            AND    v_date between pj.date_from  and nvl(pj.date_to,to_date('31-Dec-4712'))
+			/* Commented For SR 177751 :: Start
+            AND    EXISTS
+                      (SELECT 1
+                       FROM   fnd_lookup_values_vl
+                       WHERE  lookup_type = 'XXOA_RUN_LATE_EARLY_DEDUCT_ORG'
+                       AND    enabled_flag = 'Y'
+                       AND    meaning =
+                                 (SELECT name
+                                  FROM   hr_all_organization_units
+                                  WHERE  TYPE = 'SE'
+                                  AND    organization_id =
+                                            paaf.organization_id))
+			Commented For Sr 177751 :: End */
+			-- Added for SR 177751 :: START
+			AND   NOT  EXISTS
+                      (SELECT 1
+                       FROM   fnd_lookup_values_vl
+                       WHERE  lookup_type = 'XXOA_EXCLUD_LATE_EARLY_SECTION'
+                       AND    enabled_flag = 'Y'
+                       AND    meaning =
+                                 (SELECT name
+                                  FROM   hr_all_organization_units
+                                  WHERE  TYPE = 'SE'
+                                  AND    organization_id =
+                                            paaf.organization_id)
+                    --   and lc_admin_plan_yn = 'N'                           --Added for SR-211619  Commented For 223979
+                      )
+			-- Added for SR 177751 :: END
+            AND    NOT EXISTS
+                          (SELECT 1
+                           FROM   fnd_lookup_values_vl
+                           WHERE  lookup_type =
+                                     'XXOA_EXCLUDE_LATE_EARLY_DEDUCT'
+                           AND    enabled_flag = 'Y'
+                           AND    meaning = papf.employee_number
+                       --    and lc_admin_plan_yn = 'N'               --Added for SR-211619  Commented For 223979
+                           )
+			 ----added for SR427279------
+			AND    NOT EXISTS
+                          (SELECT 1
+                           FROM   fnd_lookup_values_vl
+                           WHERE  lookup_type =
+                                     'XXOA_EXCL_JOB_LATE_EARLY_DED'
+                           AND    enabled_flag = 'Y'
+                           AND    meaning = pj.name
+						   AND v_date BETWEEN start_date_active
+								AND NVL(end_date_active,'31-DEC-4712')
+                           )
+			AND    NOT EXISTS
+                          (SELECT 1
+                           FROM   fnd_lookup_values_vl
+                           WHERE  lookup_type =
+                                     'XXOA_EXCL_GRADE_LATE_EARLY_DED'
+                           AND    enabled_flag = 'Y'
+                           AND    meaning = pg.name
+						   AND v_date BETWEEN start_date_active
+								AND NVL(end_date_active,'31-DEC-4712')
+                           );
+							  ----END : added for SR427279------
+         EXCEPTION
+            WHEN NO_DATA_FOUND
+            THEN
+               v_person_id   := NULL;
+            WHEN TOO_MANY_ROWS
+            THEN
+               v_person_id   := NULL;
+            WHEN OTHERS
+            THEN
+               v_person_id   := NULL;
+         END;
+         dbms ('v_person_id : ' || v_person_id);
+         IF v_person_id IS NOT NULL
+         THEN
+            /*====================================*/
+            /*Derive Shift Name and Holiday Count */
+            /*====================================*/
+            v_shift_name       := xxoa_otl_get_shift_name_fns (v_person_id
+                                                              ,v_date
+                                                              ,'NAME');
+            v_holiday_cnt      := xxoa_otl_check_holiday_fns (v_person_id
+                                                             ,v_date);
+            dbms ('v_shift_name : ' || v_shift_name);
+            dbms ('v_holiday_cnt: ' || v_holiday_cnt);
+
+					----added for SR 398109---
+		Begin
+        c_chk_shift:=0;
+         SELECT count(1) into c_chk_shift
+         FROM apps.fnd_lookup_values_vl flv
+         WHERE flv.lookup_type = 'XXOA_OTL_LATE_EARLY_SHIFT_EXCL'
+         AND flv.enabled_flag  ='Y'
+         AND v_date BETWEEN flv.start_date_active
+         AND NVL(flv.end_date_active,'31-DEC-4712')
+         AND Upper(Meaning) = Upper(v_shift_name);
+         Exception when others then
+         c_chk_shift:=0;
+        End;
+
+		 log ('c_chk_shift: ' || c_chk_shift);
+----End for SR 398109---
+        --    IF UPPER (v_shift_name) NOT LIKE '%OFF%' AND v_holiday_cnt = 0  ---commeted for SR 398109
+			IF c_chk_shift <> 1 AND v_holiday_cnt = 0  ---added for SR 398109
+            THEN
+               /*================================*/
+               /*Derive Shift Start And End Time */
+               /*================================*/
+               v_sh_start_time_st_dt      := TO_DATE (
+                                                TO_CHAR (v_date
+                                                        ,'MM/DD/RRRR')
+                                                || LPAD (
+                                                      xxoa_otl_get_shift_name_fns (
+                                                         v_person_id
+                                                        ,v_date
+                                                        ,'START_TIME')
+                                                     ,'4'
+                                                     ,'0')
+                                               ,'MM/DD/RRRRHH24MI');
+               v_sh_stop_time_st_dt       := TO_DATE (
+                                                TO_CHAR (v_date
+                                                        ,'MM/DD/RRRR')
+                                                || LPAD (
+                                                      xxoa_otl_get_shift_name_fns (
+                                                         v_person_id
+                                                        ,v_date
+                                                        ,'STOP_TIME')
+                                                     ,'4'
+                                                     ,'0')
+                                               ,'MM/DD/RRRRHH24MI');
+               v_sh_start_time_st         := LPAD (
+                                                xxoa_otl_get_shift_name_fns (
+                                                   v_person_id
+                                                  ,v_date
+                                                  ,'START_TIME')
+                                               ,'4'
+                                               ,'0');
+               v_sh_stop_time_st          := LPAD (
+                                                xxoa_otl_get_shift_name_fns (
+                                                   v_person_id
+                                                  ,v_date
+                                                  ,'STOP_TIME')
+                                               ,'4'
+                                               ,'0');
+               /* Added logic by Transsys to get correct stop time */
+               IF v_sh_start_time_st_dt > v_sh_stop_time_st_dt
+               THEN
+                  v_sh_stop_time_st_dt   := v_sh_stop_time_st_dt + 1;
+
+
+               /*  TO_DATE (   TO_CHAR (v_date + 1, 'MM/DD/RRRR')
+                          || LPAD (xxoa_otl_get_shift_name_fns (v_person_id,
+                                                                v_date + 1,
+                                                                'STOP_TIME'
+                                                               ),
+                                   '4',
+                                   '0'
+                                  ),
+                          'MM/DD/RRRRHH24MI'
+                         ); */
+               END IF;
+
+               /* Added logic by Transsys to get correct stop time */
+               dbms ('v_sh_start_time_st_dt : ' || v_sh_start_time_st_dt);
+               dbms ('v_sh_stop_time_st_dt : ' || v_sh_stop_time_st_dt);
+               dbms ('v_sh_start_time_st : ' || v_sh_start_time_st);
+               dbms ('v_sh_stop_time_st : ' || v_sh_stop_time_st);
+               /*=====================================*/
+               /*Derive the Actual start and end Time */
+               /*=====================================*/
+               BEGIN
+                  v_act_start_time_st   := '0';
+                  v_act_stop_time_st    := '0';
+                  SELECT LPAD (TO_CHAR (MIN (xxtc.start_time)
+                                       ,'HH24MI')
+                              ,'4'
+                              ,'0')
+                        ,LPAD (TO_CHAR (MAX (xxtc.stop_time)
+                                       ,'HH24MI')
+                              ,'4'
+                              ,'0')
+                        ,MIN (xxtc.start_time)
+                        ,MAX (xxtc.stop_time)
+                  INTO   v_act_start_time_st
+                        ,v_act_stop_time_st
+                        ,v_act_start_time_st_dt
+                        ,v_act_stop_time_st_dt
+                  FROM   xxoa_otl_time_card_detail_v xxtc
+                  WHERE  1 = 1
+                  AND    xxtc.resource_id = v_person_id
+                  AND    TRUNC (xxtc.punch_date) = v_date
+                  AND    xxtc.approval_status = 'APPROVED';
+               EXCEPTION
+                  WHEN OTHERS
+                  THEN
+                     v_act_start_time_st      := '0';
+                     v_act_stop_time_st       := '0';
+                     v_act_start_time_st_dt   := NULL;
+                     v_act_stop_time_st_dt    := NULL;
+               END;
+               dbms ('v_act_start_time_st : ' || v_act_start_time_st);
+               dbms ('v_act_stop_time_st : ' || v_act_stop_time_st);
+               dbms ('v_act_start_time_st_dt : ' || v_act_start_time_st_dt);
+               dbms ('v_act_stop_time_st_dt : ' || v_act_stop_time_st_dt);
+               /*===========================*/
+               /*Derive Total Working Hours */
+               /*===========================*/
+               v_total_shift_hours        := 24
+                                             * (v_sh_stop_time_st_dt
+                                                - v_sh_start_time_st_dt);
+               v_total_actual_hours       := 24
+                                             * (v_act_stop_time_st_dt
+                                                - v_act_start_time_st_dt);
+               dbms ('v_total_shift_hours : ' || v_total_shift_hours);
+               dbms ('v_total_actual_hours : ' || v_total_actual_hours);
+               /*==============================*/
+               /*Convert Shift Stop in minutes*/
+               /*==============================*/
+               IF v_sh_stop_time_st = '0'
+               THEN
+                  v_sh_stop_time   := 0;
+               ELSE
+                  v_sh_stop_time      := (SUBSTR (v_sh_stop_time_st
+                                                 ,1
+                                                 ,2)
+                                          * 60)
+                                         + SUBSTR (v_sh_stop_time_st
+                                                  ,-2);
+               END IF;
+               dbms ('v_sh_stop_time : ' || v_sh_stop_time);
+               /*===============================*/
+               /*Convert Actual Stop in minutes*/
+               /*===============================*/
+               IF v_act_stop_time_st = '0'
+               THEN
+                  v_act_stop_time   := 0;
+               ELSE
+                  v_act_stop_time      := (SUBSTR (v_act_stop_time_st
+                                                  ,1
+                                                  ,2)
+                                           * 60)
+                                          + SUBSTR (v_act_stop_time_st
+                                                   ,-2);
+               END IF;
+               dbms ('v_act_stop_time : ' || v_act_stop_time);
+               /*==========================================================*/
+               /*Calcualte the time difference between actual and scheduled*/
+               /*==========================================================*/
+               IF v_act_stop_time = 0
+               THEN
+                  v_stop_time_diff   := 9999;
+
+                 ELSE
+                  /* Added by transsys to get correct stop time difference*/
+                  --v_stop_time_diff   := v_sh_stop_time - v_act_stop_time;
+				  --
+				  --Added by Deepak as start of code for shift stop time as per SR 297464
+                  IF ((TRUNC(v_sh_stop_time_st_dt) != TRUNC(v_act_stop_time_st_dt)) AND (v_sh_stop_time < v_act_stop_time))  THEN
+                    v_sh_stop_time := 1440 + v_sh_stop_time;
+                  END IF;
+					dbms ('v_sh_stop_time_222 : ' || v_sh_stop_time);
+					--End of Code for shift stop time as per SR 297464
+					--
+                    v_stop_time_diff   := abs(v_act_stop_time - v_sh_stop_time);
+                 END IF;
+                 dbms ('v_stop_time_diff : ' || v_stop_time_diff);
+
+                IF TRUNC(v_sh_stop_time_st_dt) = TRUNC(v_act_stop_time_st_dt)
+                THEN
+
+                   v_stop_time_diff   := abs(v_sh_stop_time - v_act_stop_time);
+                     log ( 'v_stop_time_diff222 : ' || v_stop_time_diff);
+                 END IF;
+
+               dbms ('v_stop_time_diff : ' || v_stop_time_diff);
+
+
+                 log ( 'v_act_stop_time : ' || v_act_stop_time);
+                 log ( 'v_start_time_diff : ' || v_start_time_diff);
+                 log ( 'v_act_stop_time_st : ' || v_act_stop_time_st);
+                 log ( 'v_sh_stop_time_st : ' || v_sh_stop_time_st);
+                 log ( 'v_act_start_time_st_dt : ' || v_act_start_time_st_dt);
+                 log ( 'v_act_stop_time_st_dt : ' || v_act_stop_time_st_dt);
+                 log ( 'v_total_shift_hours : ' || v_total_shift_hours);
+                 log ( 'v_total_actual_hours : ' || v_act_stop_time_st_dt);
+                 log ( 'v_stop_time_diff : ' || v_stop_time_diff);
+                 log ( 'v_amount : ' || v_amount);
+               /*=================================================*/
+               /*Global Values for Grace Time and allowed Attempts*/
+               /*=================================================*/
+               BEGIN
+                  SELECT global_value
+                  INTO   v_grace_time
+                  FROM   ff_globals_f
+                  WHERE  global_name = 'XXOA_EARLY_GOING_GRACE_TIME'
+                  AND    SYSDATE BETWEEN effective_start_date
+                                     AND effective_end_date
+                  AND    business_group_id =
+                            fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID');
+               END;
+               BEGIN
+                  SELECT global_value
+                  INTO   v_grace_attempt
+                  FROM   ff_globals_f
+                  WHERE  global_name = 'XXOA_EARLY_GO_GRACE_ATTEMPT'
+                  AND    SYSDATE BETWEEN effective_start_date
+                                     AND effective_end_date
+                  AND    business_group_id =
+                            fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID');
+               END;
+               dbms ('v_grace_attempt : ' || v_grace_attempt);
+               /*==========================*/
+               /*Basic Salary For a Minut */
+               /*=========================*/
+               v_basic_sal                := xxoa_payroll_all.
+                                              get_basic_salary (
+                                                p_bg_id
+                                               ,p_assignment_id
+                                               ,v_date);
+               v_days                     :=   TRUNC (LAST_DAY (p_end_date))
+                                             - TRUNC (p_end_date
+                                                     ,'MM')
+                                             + 1;
+               v_1_min_basic_sal          := (v_basic_sal * 12)
+                                             / (60
+                                                * (240 * v_total_shift_hours));
+               dbms ('v_basic_sal : ' || v_basic_sal);
+               dbms ('v_days : ' || v_days);
+               dbms ('v_1_min_basic_sal : ' || v_1_min_basic_sal);
+               /*===============================*/
+               /*Derive Conditions as per policy*/
+               /*===============================*/
+            /* Commented by Venkat to fix the early going grace issue on 20/12/2015*/
+              IF (
+                  (v_act_stop_time_st_dt < v_sh_stop_time_st_dt and lc_admin_plan_yn = 'N')        --Added for SR-211619
+                  or                                                                               --Added for SR-211619
+                  (lc_admin_plan_yn = 'Y')                                                         --Added for SR-211619
+                 )
+               THEN
+--                  v_occurence_rep   := v_occurence_rep + 1;                   --Commented for SR-211619
+--                  dbms ('v_occurence_rep : ' || v_occurence_rep);             --Commented for SR-211619
+--                  LOG ('v_occurence_rep : ' || v_occurence_rep);              --Commented for SR-211619
+
+    --Added for SR-211619 Starts
+                    lc_early_deduction_yn := xxoa_hr_late_early_ded_rep_new.get_flexi_late_early_dtls(p_assignment_id,v_date
+                                                                                                    ,v_sh_start_time_st_dt,v_sh_stop_time_st_dt
+                                                                                                    ,v_act_start_time_st_dt,v_act_stop_time_st_dt
+                                                                                                    ,'EARLY_DEDUCTION_YN'
+                                                                                                    );
+                    v_deduction_flag := lc_early_deduction_yn;
+
+                 if lc_admin_plan_yn = 'Y' then
+
+                    if v_deduction_flag = 'Y' then
+                        v_occurence_rep := v_occurence_rep + 1;
+                        dbms ('v_occurence_rep : ' || v_occurence_rep);
+                    end if;
+
+                 elsif lc_admin_plan_yn = 'N' then
+                        v_occurence_rep := v_occurence_rep + 1;
+                        dbms ('v_occurence_rep : ' || v_occurence_rep);
+    --Added for SR-211619 Ends
+
+                        IF v_stop_time_diff <= v_grace_time
+                        THEN
+                           IF v_occurence > v_grace_attempt
+                           THEN
+                              v_deduction_flag   := 'Y';
+                           ELSE
+                              v_deduction_flag   := 'N';
+                              dbms ('v_occurence : ' || v_occurence);
+                              LOG ('v_occurence : ' || v_occurence);
+                              v_occurence        := v_occurence + 1;
+                           END IF;
+                        ELSE
+                           v_deduction_flag   := 'Y';
+                        END IF;
+                        dbms ('v_deduction_flag : ' || v_deduction_flag);
+                        LOG ('v_deduction_flag : ' || v_deduction_flag);
+                 end if;                      --Added for SR-211619
+              /* Commented by Venkat to fix the early going grace issue on 20/12/2015*/
+                 /* Added by Venkat to fix the early going grace issue on 20/12/2015*/
+                IF (
+                    (v_act_stop_time_st_dt < v_sh_stop_time_st_dt and lc_admin_plan_yn = 'N')        --Added for SR-211619
+                    or                                                                               --Added for SR-211619
+                    (lc_admin_plan_yn = 'Y')                                                         --Added for SR-211619
+                   )
+                THEN
+--                  v_occurence_rep := v_occurence_rep + 1;               --Commented for SR-211619
+--                  dbms ('v_occurence_rep : ' || v_occurence_rep);       --Commented for SR-211619
+
+    --Added for SR-211619 Starts
+                 if lc_admin_plan_yn = 'Y' then
+
+                    if v_deduction_flag = 'Y' then
+                        v_occurence_rep := v_occurence_rep + 1;
+                        dbms ('v_occurence_rep : ' || v_occurence_rep);
+                    end if;
+
+                 elsif lc_admin_plan_yn = 'N' then
+                        v_occurence_rep := v_occurence_rep + 1;
+                        dbms ('v_occurence_rep : ' || v_occurence_rep);
+    --Added for SR-211619 Ends
+
+                      IF v_stop_time_diff <= v_grace_time
+                      THEN
+                         IF v_occurence > v_grace_attempt
+                         THEN
+                            v_deduction_flag := 'Y';
+                         ELSE
+                            IF v_total_actual_hours >= v_total_shift_hours
+                            THEN
+                               v_deduction_flag := 'N';
+                               dbms ('v_occurence : ' || v_occurence);
+                               v_occurence := v_occurence + 1;
+                            ELSE
+                            v_deduction_flag := 'Y';
+                            END IF;
+                          END IF;
+                      ELSE
+                         v_deduction_flag := 'Y';
+                     END IF;
+                 end if;          --Added for SR-211619
+               END IF;
+
+
+/*=============================================*/
+/*  Derive Conditions as per policy           */
+/*On Leave Date if Emp is late/Early going  */
+/*then there should not be any deduction*/
+/*=============================================*/
+/* Added By Sameer Patil(ACL) Start here */
+                  BEGIN
+                     SELECT 'Y'
+                       INTO l_flag
+                       FROM per_absence_attendances a
+                      WHERE a.person_id = v_person_id
+                        AND TRUNC (v_date) BETWEEN TRUNC (a.date_start)
+                                               AND TRUNC (a.date_end);
+                  EXCEPTION
+                     WHEN OTHERS
+                     THEN
+                        l_flag := 'N';
+                  END;
+
+                  IF l_flag = 'Y'
+                  THEN
+                  v_deduction_flag := 'N';
+                 END IF;
+ /* Added by Venkat to fix the early going grace issue on 20/12/2015*/
+
+                IF v_deduction_flag = 'N'
+                  THEN
+                     v_msg      :=    'Punch Date : '
+                                   || TO_CHAR (v_date
+                                              ,'DD-MON-RRRR')
+                                   || ' Number of occurence : '
+                                   || v_occurence_rep
+                                   || ' Number of grace attempt used : '
+                                   || v_occurence
+                                   || ' Early Leaving by (Min) : '
+                                   || v_stop_time_diff
+                                   || ' Amount Deducted : '
+                                   || TO_CHAR (v_amount
+                                              ,'99900.99')
+                                   || ' Calculation Type : '       --Added for SR-211619
+                                   || lc_calculation_type;         --Added for SR-211619
+                     LOG (v_msg);
+                  ELSIF v_deduction_flag = 'Y'
+                  THEN
+
+                     --Added for SR-211619 Starts
+                      if lc_admin_plan_yn = 'Y' then
+                          lc_early_deduction_mins := xxoa_hr_late_early_ded_rep_new.get_flexi_late_early_dtls(p_assignment_id,v_date
+                                                                                                          ,v_sh_start_time_st_dt,v_sh_stop_time_st_dt
+                                                                                                          ,v_act_start_time_st_dt,v_act_stop_time_st_dt
+                                                                                                          ,'EARLY_DEDUCTION_MINS'
+                                                                                                          );
+                           v_stop_time_diff := abs(lc_early_deduction_mins);
+                      end if;
+                     --Added for SR-211619 Ends
+                     v_amount      := ROUND (
+                                         (v_1_min_basic_sal
+                                          * v_stop_time_diff)
+                                        ,3);
+                     v_msg         :=    'Punch Date : '
+                                      || TO_CHAR (v_date
+                                                 ,'DD-MON-RRRR')
+                                      || ' Number of occurence : '
+                                      || v_occurence_rep
+                                      || ' Number of grace attempt used : '
+                                      || v_occurence
+                                      || ' Early Leaving by (Min) : '
+                                      || v_stop_time_diff
+                                      || ' Amount Deducted : '
+                                      || TO_CHAR (v_amount
+                                                 ,'99900.99')
+                                      || ' Calculation Type : '       --Added for SR-211619
+                                      || lc_calculation_type;         --Added for SR-211619
+                     LOG (v_msg);
+                  END IF;
+                  dbms ('v_msg : ' || v_msg);
+                  dbms ('v_amount : ' || v_amount);
+                  v_record_exist    := 0;
+                  v_insert          := 'N';
+                  BEGIN
+                     SELECT COUNT (1)
+                     INTO   v_record_exist
+                     FROM   xxoa_early_late_deduction
+                     WHERE  person_id = v_person_id
+                     AND    TRUNC (punch_date) = TRUNC (v_date)
+                     AND    transaction_type = 'EARLY_GOING';
+                  END;
+                  IF v_record_exist > 0
+                  THEN
+                     v_insert   := 'N';
+                     LOG (
+                           'Record Already Exist For Employee : '
+                        || v_employee_number
+                        || ' For Date : '
+                        || v_date);
+                  ELSE
+                     IF ((lc_admin_plan_yn = 'Y' and v_deduction_flag = 'Y') or lc_admin_plan_yn = 'N') then    --Added for SR-211619
+                         v_insert   := 'Y';
+                     END IF;                                                                                        --Added for SR-211619
+                  END IF;
+                  IF v_insert = 'Y'
+                  THEN
+                     BEGIN
+                        INSERT
+                        INTO   xxoa.xxoa_early_late_deduction (
+                                  transaction_type
+                                 ,period_id
+                                 ,person_id
+                                 ,punch_date
+                                 ,sh_start_time
+                                 ,sh_end_time
+                                 ,act_start_time
+                                 ,act_end_time
+                                 ,late_hour_time_cnt
+                                 ,no_of_occurence
+                                 ,amount_deducted
+                                 ,MESSAGE
+                                 ,grace_attempt_used)
+                        VALUES ('EARLY_GOING'
+                               ,p_period_id
+                               ,v_person_id
+                               ,v_date
+                               ,v_sh_start_time_st
+                               ,v_sh_stop_time_st
+                               ,v_act_start_time_st
+                               ,v_act_stop_time_st
+                               ,v_stop_time_diff
+                               ,v_occurence_rep
+                               ,v_amount
+                               ,v_msg
+                            -- ,v_occurence                                     --Commented for SR 190134
+                               ,decode(lc_admin_plan_yn,'Y',0,v_occurence)      --Added for SR 190134
+                               );
+                        COMMIT;
+                        LOG (
+                              'Record Inserted For Employee : '
+                           || v_employee_number
+                           || ' For Punch Date : '
+                           || v_date);
+                     EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                           LOG (
+                                 'Insert Record Faild For Employee : '
+                              || v_employee_number
+                              || ' For Punch Date : '
+                              || v_date);
+                     END;
+                  END IF;
+               END IF;
+            END IF;
+         END IF;
+         v_date     := v_date + 1;
+      END LOOP;
+      p_msg_out         := v_msg;
+      RETURN v_amount;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         RETURN 0;
+   END;
+
+--SR-211619 Starts
+
+  FUNCTION get_employee_group(
+                              p_assignment_id  number
+                             ,p_effective_date date
+                             )
+  RETURN VARCHAR2
+  IS
+    cursor cur_emp_group
+    is
+      select ppg.segment1 employee_group
+        from per_all_people_f      pap
+            ,per_all_assignments_f paa
+            ,pay_people_groups     ppg
+       where pap.person_id        = paa.person_id
+         and paa.person_id        = paa.person_id
+         and paa.people_group_id  = ppg.people_group_id
+         and trunc(p_effective_date) between pap.effective_start_date and trunc(nvl(pap.effective_end_date,p_effective_date+1))
+         and trunc(p_effective_date) between paa.effective_start_date and trunc(nvl(paa.effective_end_date,p_effective_date+1))
+         and trunc(p_effective_date) between trunc(nvl(ppg.start_date_active,p_effective_date)) and trunc(nvl(ppg.end_date_active,p_effective_date+1))
+         and pap.current_employee_flag = 'Y'
+         and paa.assignment_type       = 'E'
+         and paa.primary_flag          = 'Y'
+         and paa.assignment_id         = p_assignment_id;
+
+     rec_emp_group cur_emp_group%rowtype;
+  BEGIN
+     open  cur_emp_group;
+     fetch cur_emp_group into rec_emp_group;
+     close cur_emp_group;
+     return (rec_emp_group.employee_group);
+  exception
+     when others then return null;
+  END;
+
+  FUNCTION get_payroll_name(
+                            p_assignment_id  number
+                           ,p_effective_date date
+                           )
+  RETURN VARCHAR2
+  IS
+    cursor cur_emp_payroll
+    is
+      select ppf.payroll_name
+        from per_all_people_f      pap
+            ,per_all_assignments_f paa
+            ,pay_payrolls_f        ppf
+       where pap.person_id        = paa.person_id
+         and paa.payroll_id       = ppf.payroll_id
+         and trunc(p_effective_date) between pap.effective_start_date and trunc(nvl(pap.effective_end_date,p_effective_date+1))
+         and trunc(p_effective_date) between paa.effective_start_date and trunc(nvl(paa.effective_end_date,p_effective_date+1))
+         and trunc(p_effective_date) between ppf.effective_start_date and trunc(nvl(paa.effective_end_date,p_effective_date+1))
+         and pap.current_employee_flag = 'Y'
+         and paa.assignment_type       = 'E'
+         and paa.primary_flag          = 'Y'
+         and paa.assignment_id         = p_assignment_id;
+
+     rec_emp_payroll cur_emp_payroll%rowtype;
+  BEGIN
+     open  cur_emp_payroll;
+     fetch cur_emp_payroll into rec_emp_payroll;
+     close cur_emp_payroll;
+     return (rec_emp_payroll.payroll_name);
+  exception
+     when others then return null;
+  END;
+
+  FUNCTION get_udt_value(
+                          p_effective_date   date
+                         ,p_user_table_name  varchar2
+                         ,p_user_column_name varchar2
+                         ,p_user_row_name    varchar2
+                         )
+  return varchar2
+  is
+    cursor cur_udt
+    is
+      SELECT pci.value udt_value
+        FROM pay_user_tables               put,
+             pay_user_rows_f               pur,
+             pay_user_columns              puc,
+             pay_user_column_instances_f   pci
+       WHERE put.user_table_id = puc.user_table_id
+         AND put.user_table_id = pur.user_table_id
+         AND pur.user_row_id = pci.user_row_id
+         AND puc.user_column_id = pci.user_column_id
+         AND trunc(p_effective_date) BETWEEN trunc(pur.effective_start_date) AND trunc(nvl(pur.effective_end_date, p_effective_date + 1))
+         AND trunc(p_effective_date) BETWEEN trunc(pci.effective_start_date) AND trunc(nvl(pci.effective_end_date, p_effective_date + 1))
+         AND put.user_table_name        = p_user_table_name
+         AND puc.user_column_name       = p_user_column_name
+         AND pur.row_low_range_or_name  = p_user_row_name;
+
+     rec_udt cur_udt%rowtype;
+  begin
+      open  cur_udt;
+      fetch cur_udt into rec_udt;
+      close cur_udt;
+
+      return (rec_udt.udt_value);
+  exception
+     when others then return null;
+  end;
+
+  FUNCTION get_rotation_plan(
+                             p_assignment_id  number
+                            ,p_effective_date date
+                            ,p_return_type    varchar2
+                            )
+  RETURN VARCHAR2
+  IS
+    cursor cur_rot_plan
+    is
+      select to_char(haif.effective_start_date,'DD-MON-RRRR') rotation_plan_eff_dt
+            ,hrp.name rotation_plan
+            ,haif.attribute1 admin_exclude_flag
+       from  per_all_people_f      pap
+            ,per_all_assignments_f paa
+            ,hxt_add_assign_info_f haif
+            ,hxt_rotation_plans    hrp
+      where pap.person_id      = paa.person_id
+        and paa.assignment_id  = haif.assignment_id
+        and haif.rotation_plan = hrp.id
+        and trunc(p_effective_date) between pap.effective_start_date  and pap.effective_end_date
+        and trunc(p_effective_date) between paa.effective_start_date  and paa.effective_end_date
+        and trunc(p_effective_date) between haif.effective_start_date and haif.effective_end_date
+        and paa.assignment_id = p_assignment_id;
+
+     rec_rot_plan cur_rot_plan%rowtype;
+  BEGIN
+
+     open  cur_rot_plan;
+     fetch cur_rot_plan into rec_rot_plan;
+     close cur_rot_plan;
+
+     if p_return_type = 'PLAN_NAME' then
+        return (rec_rot_plan.rotation_plan);
+     elsif p_return_type = 'PLAN_EFF_DATE' then
+        return (rec_rot_plan.rotation_plan_eff_dt);
+     elsif p_return_type = 'ADMIN_EXCLUDE_FLAG' then
+        return (rec_rot_plan.admin_exclude_flag);
+     end if;
+
+  exception
+     when others then return null;
+  END;
+  --- Added for SR 226703 :: START
+  FUNCTION get_prev_rotation_plan(
+                             p_assignment_id  number
+                            ,p_effective_date date
+                              )
+  RETURN VARCHAR2
+  IS
+    cursor cur_rot_plan
+    is
+     SELECT PREV_RP FROM(
+     SELECT *  FROM (select paa.assignment_id
+       ,hrp.name rp
+       ,LAG(hrp.name) OVER (PARTITION BY paa.assignment_id ORDER BY haif.effective_start_date ) AS prev_rp
+       ,haif.effective_start_date rotation_plan_eff_dt
+       from  per_all_people_f      pap
+            ,per_all_assignments_f paa
+            ,hxt_add_assign_info_f haif
+            ,hxt_rotation_plans    hrp
+      where pap.person_id      = paa.person_id
+        and paa.assignment_id  = haif.assignment_id
+        and haif.rotation_plan = hrp.id
+        and (p_effective_date) between pap.effective_start_date  and pap.effective_end_date
+        and (p_effective_date) between paa.effective_start_date  and paa.effective_end_date
+        and paa.assignment_id = p_assignment_id )s WHERE s.rp != prev_rp and s.rotation_plan_eff_dt <= p_effective_date order by s.rotation_plan_eff_dt desc) WHERE ROWNUM=1
+        ;
+
+     rec_rot_plan cur_rot_plan%rowtype;
+  BEGIN
+
+     open  cur_rot_plan;
+     fetch cur_rot_plan into rec_rot_plan;
+     close cur_rot_plan;
+
+     return (rec_rot_plan.PREV_RP);
+
+  exception
+     when others then return null;
+  END;
+--- Added for SR 226703 :: END
+  FUNCTION is_admin_rotation_plan_yn (
+                                        p_assignment_id          number
+                                        ,p_punch_date             date
+										,p_religion              varchar2      --- Added for SR 226703
+                                     )
+ return varchar2
+  IS
+    cursor cur_adm_plan(p_payroll_name varchar2,p_rotation_plan varchar2,p_rotation_plan_eff_date date)
+    is
+      select count(*) from
+          (
+          SELECT puc.user_column_name payroll_name
+                ,pur.row_low_range_or_name
+                ,pci.value admin_plan_name
+              --  ,xxoa_hr_late_early_ded_rep_new.get_udt_value(p_punch_date,'XXOA_OTL_RAMADAN_POLICY','ROTATION_PLAN',pci.value) ramadan_plan_name commented For SR 226703
+			    ,xxoa_hr_late_early_ded_rep_new.get_udt_value(p_punch_date,'XXOA_LE_OTL_RAMADAN_ROASTER',p_payroll_name||'-'||p_religion,pci.value) ramadan_plan_name--- Added for SR 226703
+              --  ,xxoa_hr_late_early_ded_rep_new.get_rotation_plan(p_assignment_id,trunc((p_rotation_plan_eff_date)-1),'PLAN_NAME') previous_plan_name Commented For SR 226703
+			  ,xxoa_hr_late_early_ded_rep_new.get_prev_rotation_plan(p_assignment_id,p_punch_date) previous_plan_name -- Added For SR 226703
+            FROM pay_user_tables               put,
+                 pay_user_rows_f               pur,
+                 pay_user_columns              puc,
+                 pay_user_column_instances_f   pci
+           WHERE put.user_table_id = puc.user_table_id
+             AND put.user_table_id = pur.user_table_id
+             AND pur.user_row_id = pci.user_row_id
+             AND puc.user_column_id = pci.user_column_id
+             AND upper(put.user_table_name) = 'XXOA_FLEXITIME_VALIDATION_DETAILS'
+             AND upper(pur.row_low_range_or_name) like 'ROTATION PLAN %'
+             AND trunc(p_punch_date) BETWEEN trunc(pur.effective_start_date) AND trunc(nvl(pur.effective_end_date, trunc(p_punch_date) + 1))
+             AND trunc(p_punch_date) BETWEEN trunc(pci.effective_start_date) AND trunc(nvl(pci.effective_end_date, trunc(p_punch_date) + 1))
+             AND puc.user_column_name = p_payroll_name
+          )
+          where (admin_plan_name = p_rotation_plan)
+                 or
+                (ramadan_plan_name = p_rotation_plan and previous_plan_name = admin_plan_name);
+
+    cursor cur_emp_group(p_payroll_name varchar2,p_employee_group_name varchar2)
+    is
+           select count(*)
+            FROM pay_user_tables               put,
+                 pay_user_rows_f               pur,
+                 pay_user_columns              puc,
+                 pay_user_column_instances_f   pci
+           WHERE put.user_table_id = puc.user_table_id
+             AND put.user_table_id = pur.user_table_id
+             AND pur.user_row_id = pci.user_row_id
+             AND puc.user_column_id = pci.user_column_id
+             AND upper(put.user_table_name) = 'XXOA_FLEXITIME_VALIDATION_DETAILS'
+             AND upper(pur.row_low_range_or_name) like 'EMPLOYEE GROUP %'
+             AND trunc(p_punch_date) BETWEEN trunc(pur.effective_start_date) AND trunc(nvl(pur.effective_end_date, trunc(p_punch_date) + 1))
+             AND trunc(p_punch_date) BETWEEN trunc(pci.effective_start_date) AND trunc(nvl(pci.effective_end_date, trunc(p_punch_date) + 1))
+             AND puc.user_column_name = p_payroll_name
+             AND pci.value            = p_employee_group_name;
+
+     lc_payroll_name          varchar2(80);
+     lc_flexi_cutover_date    varchar2(12);
+     lc_employee_group        varchar2(60);
+     ln_admin_plan_cnt        number;
+     ln_emp_flexi_group_cnt   number;
+     lc_rotation_plan         varchar2(80);
+     lc_rotation_plan_eff_dt  varchar2(12);
+     ld_rotation_plan_eff_dt  date;
+     lc_admin_exclusion_flag  varchar2(1);
+
+  BEGIN
+       lc_payroll_name          := xxoa_hr_late_early_ded_rep_new.get_payroll_name(p_assignment_id,p_punch_date);
+       lc_flexi_cutover_date    := xxoa_hr_late_early_ded_rep_new.get_udt_value(p_punch_date,'XXOA_FLEXITIME_VALIDATION_DETAILS',lc_payroll_name,'Flexitime Cutover Date');
+       lc_employee_group        := xxoa_hr_late_early_ded_rep_new.get_employee_group(p_assignment_id,p_punch_date);
+       lc_rotation_plan         := xxoa_hr_late_early_ded_rep_new.get_rotation_plan(p_assignment_id,p_punch_date,'PLAN_NAME');
+       lc_rotation_plan_eff_dt  := xxoa_hr_late_early_ded_rep_new.get_rotation_plan(p_assignment_id,p_punch_date,'PLAN_EFF_DATE');
+       lc_admin_exclusion_flag  := xxoa_hr_late_early_ded_rep_new.get_rotation_plan(p_assignment_id,p_punch_date,'ADMIN_EXCLUDE_FLAG');
+
+       if lc_rotation_plan_eff_dt is not null then
+          ld_rotation_plan_eff_dt := trunc(to_date(lc_rotation_plan_eff_dt,'DD-MON-RRRR'));
+       end if;
+
+       IF lc_admin_exclusion_flag = 'Y' then
+           return ('N');
+       ELSIF lc_flexi_cutover_date is null then
+          return ('N');
+       ELSIF lc_flexi_cutover_date is not null and to_date(lc_flexi_cutover_date,'DD-MON-RRRR') > trunc(p_punch_date) then
+          return ('N');
+       ELSE
+           open cur_emp_group(lc_payroll_name,lc_employee_group);
+           fetch cur_emp_group into ln_emp_flexi_group_cnt;
+           close cur_emp_group;
+
+           if ln_emp_flexi_group_cnt = 0 then
+              return ('N');
+           else
+               open  cur_adm_plan(lc_payroll_name,lc_rotation_plan,ld_rotation_plan_eff_dt);
+               fetch cur_adm_plan into ln_admin_plan_cnt;
+               close cur_adm_plan;
+
+               if ln_admin_plan_cnt = 0 then
+                  return ('N');
+               else
+                  return ('Y');
+               end if;
+           end if;
+       END IF;
+  EXCEPTION
+    WHEN OTHERS THEN
+    RETURN ('N');
+  END;
+
+  function get_flexi_late_early_dtls(
+                                      p_assignment_id          number
+                                     ,p_punch_date             date
+                                     ,p_shift_in_time          date
+                                     ,p_shift_out_time         date
+                                     ,p_punch_in_time          date
+                                     ,p_punch_out_time         date
+                                     ,p_return_type            varchar2
+                                   )
+  return varchar2
+  is
+    lc_payroll_name         varchar2(80);
+    lc_flexi_cutover_date   varchar2(80);
+    lc_flexi_late_mins      varchar2(80);
+    lc_flexi_early_mins     varchar2(80);
+    ld_flexi_shift_in_time  date;
+    ld_flexi_shift_out_time date;
+    lc_time_in_status       varchar2(30);
+    ln_total_shift_hours    number;
+    ln_total_punch_hours    number;
+    lc_shift_completed_yn   varchar2(1);
+    lc_late_deduction_yn    varchar2(1)  := 'N';
+    lc_early_deduction_yn   varchar2(1)  := 'N';
+    lc_late_deduction_mins  number       := 0;
+    lc_early_deduction_mins number       := 0;
+  begin
+    log('<-------get_flexi_late_early_dtls starts------>');
+    log('lc_late_deduction_yn             -->'||p_assignment_id);
+    log('lc_late_deduction_yn             -->'||to_char(p_punch_date,'DD-MON-RRRR HH24:MI:SS'));
+    log('p_shift_in_time                  -->'||to_char(p_shift_in_time,'DD-MON-RRRR HH24:MI:SS'));
+    log('p_shift_out_time                 -->'||to_char(p_shift_out_time,'DD-MON-RRRR HH24:MI:SS'));
+    log('p_punch_in_time                  -->'||to_char(p_punch_in_time,'DD-MON-RRRR HH24:MI:SS'));
+    log('p_punch_out_time                 -->'||to_char(p_punch_out_time,'DD-MON-RRRR HH24:MI:SS'));
+    lc_payroll_name       := xxoa_hr_late_early_ded_rep_new.get_payroll_name(p_assignment_id,p_punch_date);
+    lc_flexi_cutover_date := xxoa_hr_late_early_ded_rep_new.get_udt_value(p_punch_date,'XXOA_FLEXITIME_VALIDATION_DETAILS',lc_payroll_name,'Flexitime Cutover Date');
+    lc_flexi_late_mins    := xxoa_hr_late_early_ded_rep_new.get_udt_value(p_punch_date,'XXOA_FLEXITIME_VALIDATION_DETAILS',lc_payroll_name,'Flexitime Late Mins');
+    lc_flexi_early_mins   := xxoa_hr_late_early_ded_rep_new.get_udt_value(p_punch_date,'XXOA_FLEXITIME_VALIDATION_DETAILS',lc_payroll_name,'Flexitime Early Mins');
+    log('lc_payroll_name                  -->'||lc_payroll_name);
+    log('lc_flexi_cutover_date            -->'||lc_flexi_cutover_date);
+    log('lc_flexi_late_mins               -->'||lc_flexi_late_mins);
+    log('lc_flexi_early_mins              -->'||lc_flexi_early_mins);
+    ld_flexi_shift_in_time  := p_shift_in_time  + (lc_flexi_late_mins/1440);
+    ld_flexi_shift_out_time := p_shift_out_time + (lc_flexi_early_mins/1440);
+    log('ld_flexi_shift_in_time           -->'||to_char(ld_flexi_shift_in_time,'DD-MON-RRRR HH24:MI:SS'));
+    log('ld_flexi_shift_out_time          -->'||to_char(ld_flexi_shift_out_time,'DD-MON-RRRR HH24:MI:SS'));
+    ln_total_shift_hours := (p_shift_out_time - p_shift_in_time)*24;
+    ln_total_punch_hours := (p_punch_out_time - p_punch_in_time)*24;
+    log('ln_total_shift_hours             -->'||ln_total_shift_hours);
+    log('ln_total_punch_hours             -->'||ln_total_punch_hours);
+    if p_punch_in_time = p_shift_in_time then
+       lc_time_in_status := 'ON TIME';
+    elsif p_punch_in_time between p_shift_in_time and ld_flexi_shift_in_time then
+       lc_time_in_status := 'FLEXI';
+    elsif p_punch_in_time > ld_flexi_shift_in_time then
+       lc_time_in_status := 'LATE';
+    end if;
+    log('lc_time_in_status                -->'||lc_time_in_status);
+    if ln_total_punch_hours >= ln_total_shift_hours then
+       lc_shift_completed_yn := 'Y';
+    else
+       lc_shift_completed_yn := 'N';
+    end if;
+    log('lc_shift_completed_yn            -->'||lc_shift_completed_yn);
+    if lc_time_in_status = 'ON TIME' and lc_shift_completed_yn = 'N' and p_punch_out_time < p_shift_out_time then
+       lc_late_deduction_yn     := 'N';
+       lc_early_deduction_yn    := 'Y';
+       lc_late_deduction_mins   := 0;
+       lc_early_deduction_mins  := round((p_shift_out_time - p_punch_out_time)*24*60);
+       log('Flexi Scenario 1 --->'||'lc_time_in_status-->'||lc_time_in_status||' ,lc_shift_completed_yn-->'||lc_shift_completed_yn
+       ||' ,Punch Out Time less than Shift Out Time');
+    elsif lc_time_in_status = 'FLEXI' and lc_shift_completed_yn = 'N' and p_punch_out_time >= p_shift_out_time then
+       lc_late_deduction_yn     := 'Y';
+       lc_early_deduction_yn    := 'N';
+       lc_late_deduction_mins   := round((ln_total_shift_hours - ln_total_punch_hours)*60);
+       lc_early_deduction_mins  := 0;
+       log('Flexi Scenario 2 --->'||'lc_time_in_status-->'||lc_time_in_status||' ,lc_shift_completed_yn-->'||lc_shift_completed_yn
+       ||' ,Punch Out Time Greater than or equal to Shift Out Time');
+    elsif lc_time_in_status = 'FLEXI' and lc_shift_completed_yn = 'N' and p_punch_out_time < p_shift_out_time then
+       lc_late_deduction_yn     := 'Y';
+       lc_early_deduction_yn    := 'Y';
+       lc_late_deduction_mins   := round((p_punch_in_time - p_shift_in_time)*24*60);
+       lc_early_deduction_mins  := round((p_shift_out_time - p_punch_out_time)*24*60);
+       log('Flexi Scenario 3 --->'||'lc_time_in_status-->'||lc_time_in_status||' ,lc_shift_completed_yn-->'||lc_shift_completed_yn
+       ||' ,Punch Out Time less than Shift Out Time');
+    elsif lc_time_in_status = 'LATE' and lc_shift_completed_yn = 'Y' then
+       lc_late_deduction_yn     := 'Y';
+       lc_early_deduction_yn    := 'N';
+       lc_late_deduction_mins   := round((p_punch_in_time - ld_flexi_shift_in_time)*24*60);
+       lc_early_deduction_mins  := 0;
+       log('Flexi Scenario 4 --->'||'lc_time_in_status-->'||lc_time_in_status||' ,lc_shift_completed_yn-->'||lc_shift_completed_yn);
+    elsif lc_time_in_status = 'LATE' and lc_shift_completed_yn = 'N' and p_punch_out_time >= ld_flexi_shift_out_time then
+       lc_late_deduction_yn     := 'Y';
+       lc_early_deduction_yn    := 'N';
+       lc_late_deduction_mins   := round((p_punch_in_time - ld_flexi_shift_in_time)*24*60);
+       lc_early_deduction_mins  := 0;
+       log('Flexi Scenario 5 --->'||'lc_time_in_status-->'||lc_time_in_status||' ,lc_shift_completed_yn-->'||lc_shift_completed_yn
+       ||' ,Punch Out Time Greater than or equal to Flexi Shift Out Time');
+    elsif lc_time_in_status = 'LATE' and lc_shift_completed_yn = 'N' and p_punch_out_time < ld_flexi_shift_out_time then
+       lc_late_deduction_yn     := 'Y';
+       lc_early_deduction_yn    := 'Y';
+       lc_late_deduction_mins   := round((p_punch_in_time - ld_flexi_shift_in_time)*24*60);
+       lc_early_deduction_mins  := round((ld_flexi_shift_out_time - p_punch_out_time)*24*60);
+       log('Flexi Scenario 6 --->'||'lc_time_in_status-->'||lc_time_in_status||' ,lc_shift_completed_yn-->'||lc_shift_completed_yn
+       ||' ,Punch Out Time less than Flexi Shift Out Time');
+    end if;
+
+    log('lc_late_deduction_yn--->'||lc_late_deduction_yn);
+    log('lc_early_deduction_yn--->'||lc_early_deduction_yn);
+    log('lc_late_deduction_mins--->'||lc_late_deduction_mins);
+    log('lc_early_deduction_mins--->'||lc_early_deduction_mins);
+
+    if p_return_type = 'LATE_DEDUCTION_YN' then
+       return (lc_late_deduction_yn);
+    elsif p_return_type = 'EARLY_DEDUCTION_YN' then
+       return (lc_early_deduction_yn);
+    elsif p_return_type = 'LATE_DEDUCTION_MINS' then
+       return (lc_late_deduction_mins);
+    elsif p_return_type = 'EARLY_DEDUCTION_MINS' then
+       return (lc_early_deduction_mins);
+    end if;
+   log('<-------get_flexi_late_early_dtls ends------>');
+  exception
+    when others then
+		if p_return_type = 'LATE_DEDUCTION_YN' then
+		   return ('N');
+		elsif p_return_type = 'EARLY_DEDUCTION_YN' then
+		   return ('N');
+		elsif p_return_type = 'LATE_DEDUCTION_MINS' then
+		   return (0);
+		elsif p_return_type = 'EARLY_DEDUCTION_MINS' then
+		   return (0);
+		end if;
+  end;
+--SR-211619 Ends
+END xxoa_hr_late_early_ded_rep_new;
