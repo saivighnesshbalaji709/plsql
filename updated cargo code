@@ -1,0 +1,178 @@
+Good requirement. This is a simple change — wrap the multiplier logic with a payroll check.
+
+---
+
+## The Change
+
+You need to fetch the payroll ID for the employee and then apply the multiplier only if it equals 181.
+
+### Step 1 — Add a new variable in the declaration section of `late_early_ded_amt`
+
+Find this section:
+```sql
+v_occurence_no            NUMBER;  --Added for SR 441873
+v_multiplier              NUMBER; --Added for SR 441873
+```
+
+Add one more variable right after:
+```sql
+v_occurence_no            NUMBER;  --Added for SR 441873
+v_multiplier              NUMBER;  --Added for SR 441873
+v_payroll_id              NUMBER;  --Added for SR 441873
+```
+
+---
+
+### Step 2 — Fetch payroll ID once per employee, right after `v_person_id` is derived
+
+Find this line:
+```sql
+log ('v_person_id : ' || v_person_id);
+IF v_person_id IS NOT NULL
+THEN
+```
+
+Add the payroll fetch right after `log ('v_person_id...')`:
+
+```sql
+log ('v_person_id : ' || v_person_id);
+
+--Added for SR 441873 :: START - Fetch payroll ID for cargo check
+BEGIN
+   SELECT paaf.payroll_id
+   INTO   v_payroll_id
+   FROM   per_all_assignments_f paaf
+   WHERE  paaf.assignment_id  = p_assignment_id
+   AND    paaf.primary_flag   = 'Y'
+   AND    v_date BETWEEN paaf.effective_start_date
+                     AND paaf.effective_end_date;
+EXCEPTION
+   WHEN OTHERS THEN
+      v_payroll_id := NULL;
+END;
+log('v_payroll_id : ' || v_payroll_id); --Added for SR 441873
+--Added for SR 441873 :: END
+
+IF v_person_id IS NOT NULL
+THEN
+```
+
+---
+
+### Step 3 — Wrap the multiplier logic with the payroll check
+
+Find the SR 441873 block you already have:
+
+```sql
+--Added for SR 441873 Starts
+BEGIN
+   SELECT COUNT (1) + 1
+   INTO   v_occurence_no
+   FROM   xxoa_early_late_deduction
+   WHERE  person_id = v_person_id
+   AND    period_id = p_period_id
+   AND    TRUNC (punch_date) < TRUNC (v_date)
+   AND    transaction_type = 'LATE_COMING';
+EXCEPTION
+   WHEN OTHERS THEN
+      v_occurence_no :=1;
+END;
+
+IF v_occurence_no <= 2 THEN
+   v_multiplier:=0;
+ELSIF v_occurence_no <= 3 THEN
+   v_multiplier:=1;
+ELSIF v_occurence_no <= 4 THEN
+   v_multiplier:=1.5;
+ELSIF v_occurence_no <= 5 THEN
+   v_multiplier:=2;
+ELSE
+   v_multiplier:=2.5;
+END IF;
+
+log('Occurence number:'||v_occurence_no);
+log('Multiplier:'||v_multiplier);
+--Added for SR 441873 Ends
+```
+
+Replace with:
+
+```sql
+--Added for SR 441873 Starts
+IF v_payroll_id = 181 THEN
+   -- Tiered multiplier applies only for Cargo Payroll
+   BEGIN
+      SELECT COUNT(1) + 1
+      INTO   v_occurence_no
+      FROM   xxoa_early_late_deduction
+      WHERE  person_id        = v_person_id
+      AND    period_id        = p_period_id
+      AND    TRUNC(punch_date) < TRUNC(v_date)
+      AND    transaction_type = 'LATE_COMING';
+   EXCEPTION
+      WHEN OTHERS THEN
+         v_occurence_no := 1;
+   END;
+
+   IF v_occurence_no <= 2 THEN
+      v_multiplier := 0;
+   ELSIF v_occurence_no <= 3 THEN
+      v_multiplier := 1;
+   ELSIF v_occurence_no <= 4 THEN
+      v_multiplier := 1.5;
+   ELSIF v_occurence_no <= 5 THEN
+      v_multiplier := 2;
+   ELSE
+      v_multiplier := 2.5;
+   END IF;
+
+   log('Cargo Payroll - Occurence number : ' || v_occurence_no);
+   log('Cargo Payroll - Multiplier       : ' || v_multiplier);
+
+ELSE
+   -- Non-Cargo Payroll: standard deduction, multiplier = 1 always
+   v_occurence_no := NULL;
+   v_multiplier   := 1;
+   log('Non-Cargo Payroll - Standard multiplier applied : ' || v_multiplier);
+END IF;
+--Added for SR 441873 Ends
+```
+
+---
+
+### Step 4 — The amount formula stays the same
+
+No change needed here — it already uses `v_multiplier`:
+
+```sql
+v_amount := ROUND(
+               (v_1_min_basic_sal
+                * v_start_time_diff
+                * v_multiplier)   --Added for SR 441873
+            ,3);
+```
+
+For non-Cargo employees, `v_multiplier = 1` so the formula becomes:
+```
+amount = per_min_sal × minutes × 1
+```
+Which is exactly the original standard formula. No impact on existing behaviour.
+
+---
+
+## Summary of What Changes
+
+| Payroll | v_multiplier | Effect |
+|---|---|---|
+| Cargo (ID=181) | 0, 1, 1.5, 2, 2.5 based on occurrence | Tiered deduction applies |
+| All others | Always 1 | Standard deduction unchanged |
+
+---
+
+## After Making This Change
+
+1. Recompile the package
+2. Run override Y for Cargo period → clears old data
+3. Run override N for Cargo period → recalculates with new logic
+4. Run override Y and N for any other payroll → confirm multiplier = 1 always
+5. Check log file — will show either `Cargo Payroll` or `Non-Cargo Payroll` message per employee per day
