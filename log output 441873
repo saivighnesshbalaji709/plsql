@@ -1,0 +1,1257 @@
++---------------------------------------------------------------------------+
+OA Custom Application: Version : 12.2
+
+Copyright (c) 1998, 2013, Oracle and/or its affiliates. All rights reserved.
+
+XXOA_OTL_LATE_EARLY_DED: OA Custom Late Coming And Early Going Deduction Process
++---------------------------------------------------------------------------+
+
+Current system time is 14-JUL-2026 15:25:48
+
++---------------------------------------------------------------------------+
+
+**Starts**14-JUL-2026 15:25:48
+**Ends**14-JUL-2026 15:25:55
++---------------------------------------------------------------------------+
+Start of log messages from FND_FILE
++---------------------------------------------------------------------------+
+ v_start_date 01-MAY-26
+v_end_date 31-MAY-26
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : Off
+v_holiday_cnt: 0
+c_chk_shift: 1
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : Off
+v_holiday_cnt: 0
+c_chk_shift: 1
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 03-MAY-26
+v_sh_stop_time_st_dt : 03-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 1000
+v_act_stop_time_st : 1503
+v_act_start_time_st_dt : 03-MAY-26
+v_act_stop_time_st_dt : 03-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 5.05
+v_sh_start_time : 420
+v_act_start_time : 600
+v_start_time_diff : 180
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->03-MAY-2026 00:00:00
+p_shift_in_time                  -->03-MAY-2026 07:00:00
+p_shift_out_time                 -->03-MAY-2026 14:00:00
+p_punch_in_time                  -->03-MAY-2026 10:00:00
+p_punch_out_time                 -->03-MAY-2026 15:03:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->03-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->03-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->5.05
+lc_time_in_status                -->LATE
+lc_shift_completed_yn            -->N
+Flexi Scenario 6 --->lc_time_in_status-->LATE ,lc_shift_completed_yn-->N ,Punch Out Time less than Flexi Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->Y
+lc_late_deduction_mins--->90
+lc_early_deduction_mins--->27
+v_occurence_rep : 1
+v_deduction_flag-->Y
+Occurence number:1
+Multiplier:0
+lc_admin_plan_yn-->Y
+Inside admin block
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->03-MAY-2026 00:00:00
+p_shift_in_time                  -->03-MAY-2026 07:00:00
+p_shift_out_time                 -->03-MAY-2026 14:00:00
+p_punch_in_time                  -->03-MAY-2026 10:00:00
+p_punch_out_time                 -->03-MAY-2026 15:03:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->03-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->03-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->5.05
+lc_time_in_status                -->LATE
+lc_shift_completed_yn            -->N
+Flexi Scenario 6 --->lc_time_in_status-->LATE ,lc_shift_completed_yn-->N ,Punch Out Time less than Flexi Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->Y
+lc_late_deduction_mins--->90
+lc_early_deduction_mins--->27
+lc_late_deduction_mins-->90
+Punch Date : 03-MAY-2026 Number of occurence : 1 Number of grace attempt used : 1 Late by (Min) : 90 Amount Deducted :     00.00 Calculation Type : FLEXI
+Record Already Exist For Employee : 81031 For Date : 03-MAY-26
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 04-MAY-26
+v_sh_stop_time_st_dt : 04-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 0900
+v_act_stop_time_st : 1456
+v_act_start_time_st_dt : 04-MAY-26
+v_act_stop_time_st_dt : 04-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 5.93333333333333333333333333333333333333
+v_sh_start_time : 420
+v_act_start_time : 540
+v_start_time_diff : 120
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->04-MAY-2026 00:00:00
+p_shift_in_time                  -->04-MAY-2026 07:00:00
+p_shift_out_time                 -->04-MAY-2026 14:00:00
+p_punch_in_time                  -->04-MAY-2026 09:00:00
+p_punch_out_time                 -->04-MAY-2026 14:56:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->04-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->04-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->5.93333333333333333333333333333333333333
+lc_time_in_status                -->LATE
+lc_shift_completed_yn            -->N
+Flexi Scenario 6 --->lc_time_in_status-->LATE ,lc_shift_completed_yn-->N ,Punch Out Time less than Flexi Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->Y
+lc_late_deduction_mins--->30
+lc_early_deduction_mins--->34
+v_occurence_rep : 2
+v_deduction_flag-->Y
+Occurence number:2
+Multiplier:0
+lc_admin_plan_yn-->Y
+Inside admin block
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->04-MAY-2026 00:00:00
+p_shift_in_time                  -->04-MAY-2026 07:00:00
+p_shift_out_time                 -->04-MAY-2026 14:00:00
+p_punch_in_time                  -->04-MAY-2026 09:00:00
+p_punch_out_time                 -->04-MAY-2026 14:56:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->04-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->04-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->5.93333333333333333333333333333333333333
+lc_time_in_status                -->LATE
+lc_shift_completed_yn            -->N
+Flexi Scenario 6 --->lc_time_in_status-->LATE ,lc_shift_completed_yn-->N ,Punch Out Time less than Flexi Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->Y
+lc_late_deduction_mins--->30
+lc_early_deduction_mins--->34
+lc_late_deduction_mins-->30
+Punch Date : 04-MAY-2026 Number of occurence : 2 Number of grace attempt used : 1 Late by (Min) : 30 Amount Deducted :     00.00 Calculation Type : FLEXI
+Record Already Exist For Employee : 81031 For Date : 04-MAY-26
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 05-MAY-26
+v_sh_stop_time_st_dt : 05-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 1000
+v_act_stop_time_st : 1446
+v_act_start_time_st_dt : 05-MAY-26
+v_act_stop_time_st_dt : 05-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 4.76666666666666666666666666666666666667
+v_sh_start_time : 420
+v_act_start_time : 600
+v_start_time_diff : 180
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->05-MAY-2026 00:00:00
+p_shift_in_time                  -->05-MAY-2026 07:00:00
+p_shift_out_time                 -->05-MAY-2026 14:00:00
+p_punch_in_time                  -->05-MAY-2026 10:00:00
+p_punch_out_time                 -->05-MAY-2026 14:46:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->05-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->05-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->4.76666666666666666666666666666666666667
+lc_time_in_status                -->LATE
+lc_shift_completed_yn            -->N
+Flexi Scenario 6 --->lc_time_in_status-->LATE ,lc_shift_completed_yn-->N ,Punch Out Time less than Flexi Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->Y
+lc_late_deduction_mins--->90
+lc_early_deduction_mins--->44
+v_occurence_rep : 3
+v_deduction_flag-->Y
+Occurence number:3
+Multiplier:1
+lc_admin_plan_yn-->Y
+Inside admin block
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->05-MAY-2026 00:00:00
+p_shift_in_time                  -->05-MAY-2026 07:00:00
+p_shift_out_time                 -->05-MAY-2026 14:00:00
+p_punch_in_time                  -->05-MAY-2026 10:00:00
+p_punch_out_time                 -->05-MAY-2026 14:46:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->05-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->05-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->4.76666666666666666666666666666666666667
+lc_time_in_status                -->LATE
+lc_shift_completed_yn            -->N
+Flexi Scenario 6 --->lc_time_in_status-->LATE ,lc_shift_completed_yn-->N ,Punch Out Time less than Flexi Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->Y
+lc_late_deduction_mins--->90
+lc_early_deduction_mins--->44
+lc_late_deduction_mins-->90
+Punch Date : 05-MAY-2026 Number of occurence : 3 Number of grace attempt used : 1 Late by (Min) : 90 Amount Deducted :     06.89 Calculation Type : FLEXI
+Record Already Exist For Employee : 81031 For Date : 05-MAY-26
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 06-MAY-26
+v_sh_stop_time_st_dt : 06-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 0800
+v_act_stop_time_st : 1441
+v_act_start_time_st_dt : 06-MAY-26
+v_act_stop_time_st_dt : 06-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 6.68333333333333333333333333333333333333
+v_sh_start_time : 420
+v_act_start_time : 480
+v_start_time_diff : 60
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->06-MAY-2026 00:00:00
+p_shift_in_time                  -->06-MAY-2026 07:00:00
+p_shift_out_time                 -->06-MAY-2026 14:00:00
+p_punch_in_time                  -->06-MAY-2026 08:00:00
+p_punch_out_time                 -->06-MAY-2026 14:41:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->06-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->06-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->6.68333333333333333333333333333333333333
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->N
+Flexi Scenario 2 --->lc_time_in_status-->FLEXI ,lc_shift_completed_yn-->N ,Punch Out Time Greater than or equal to Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->19
+lc_early_deduction_mins--->0
+v_occurence_rep : 4
+v_deduction_flag-->Y
+Occurence number:4
+Multiplier:1.5
+lc_admin_plan_yn-->Y
+Inside admin block
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->06-MAY-2026 00:00:00
+p_shift_in_time                  -->06-MAY-2026 07:00:00
+p_shift_out_time                 -->06-MAY-2026 14:00:00
+p_punch_in_time                  -->06-MAY-2026 08:00:00
+p_punch_out_time                 -->06-MAY-2026 14:41:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->06-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->06-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->6.68333333333333333333333333333333333333
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->N
+Flexi Scenario 2 --->lc_time_in_status-->FLEXI ,lc_shift_completed_yn-->N ,Punch Out Time Greater than or equal to Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->19
+lc_early_deduction_mins--->0
+lc_late_deduction_mins-->19
+Punch Date : 06-MAY-2026 Number of occurence : 4 Number of grace attempt used : 1 Late by (Min) : 19 Amount Deducted :     02.18 Calculation Type : FLEXI
+Record Already Exist For Employee : 81031 For Date : 06-MAY-26
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : ME07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 07-MAY-26
+v_sh_stop_time_st_dt : 07-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1500
+v_act_start_time_st : 0800
+v_act_stop_time_st : 1538
+v_act_start_time_st_dt : 07-MAY-26
+v_act_stop_time_st_dt : 07-MAY-26
+v_total_shift_hours : 8
+v_total_actual_hours : 7.63333333333333333333333333333333333333
+v_sh_start_time : 420
+v_act_start_time : 480
+v_start_time_diff : 60
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .06700655
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->07-MAY-2026 00:00:00
+p_shift_in_time                  -->07-MAY-2026 07:00:00
+p_shift_out_time                 -->07-MAY-2026 15:00:00
+p_punch_in_time                  -->07-MAY-2026 08:00:00
+p_punch_out_time                 -->07-MAY-2026 15:38:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->07-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->07-MAY-2026 16:30:00
+ln_total_shift_hours             -->8
+ln_total_punch_hours             -->7.63333333333333333333333333333333333333
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->N
+Flexi Scenario 2 --->lc_time_in_status-->FLEXI ,lc_shift_completed_yn-->N ,Punch Out Time Greater than or equal to Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->22
+lc_early_deduction_mins--->0
+v_occurence_rep : 5
+v_deduction_flag-->Y
+Occurence number:5
+Multiplier:2
+lc_admin_plan_yn-->Y
+Inside admin block
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->07-MAY-2026 00:00:00
+p_shift_in_time                  -->07-MAY-2026 07:00:00
+p_shift_out_time                 -->07-MAY-2026 15:00:00
+p_punch_in_time                  -->07-MAY-2026 08:00:00
+p_punch_out_time                 -->07-MAY-2026 15:38:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->07-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->07-MAY-2026 16:30:00
+ln_total_shift_hours             -->8
+ln_total_punch_hours             -->7.63333333333333333333333333333333333333
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->N
+Flexi Scenario 2 --->lc_time_in_status-->FLEXI ,lc_shift_completed_yn-->N ,Punch Out Time Greater than or equal to Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->22
+lc_early_deduction_mins--->0
+lc_late_deduction_mins-->22
+Punch Date : 07-MAY-2026 Number of occurence : 5 Number of grace attempt used : 1 Late by (Min) : 22 Amount Deducted :     02.95 Calculation Type : FLEXI
+Record Already Exist For Employee : 81031 For Date : 07-MAY-26
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : Off
+v_holiday_cnt: 0
+c_chk_shift: 1
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : Off
+v_holiday_cnt: 0
+c_chk_shift: 1
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 10-MAY-26
+v_sh_stop_time_st_dt : 10-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 1000
+v_act_stop_time_st : 1420
+v_act_start_time_st_dt : 10-MAY-26
+v_act_stop_time_st_dt : 10-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 4.33333333333333333333333333333333333333
+v_sh_start_time : 420
+v_act_start_time : 600
+v_start_time_diff : 180
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->10-MAY-2026 00:00:00
+p_shift_in_time                  -->10-MAY-2026 07:00:00
+p_shift_out_time                 -->10-MAY-2026 14:00:00
+p_punch_in_time                  -->10-MAY-2026 10:00:00
+p_punch_out_time                 -->10-MAY-2026 14:20:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->10-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->10-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->4.33333333333333333333333333333333333333
+lc_time_in_status                -->LATE
+lc_shift_completed_yn            -->N
+Flexi Scenario 6 --->lc_time_in_status-->LATE ,lc_shift_completed_yn-->N ,Punch Out Time less than Flexi Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->Y
+lc_late_deduction_mins--->90
+lc_early_deduction_mins--->70
+v_occurence_rep : 6
+v_deduction_flag-->Y
+Occurence number:6
+Multiplier:2.5
+lc_admin_plan_yn-->Y
+Inside admin block
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->10-MAY-2026 00:00:00
+p_shift_in_time                  -->10-MAY-2026 07:00:00
+p_shift_out_time                 -->10-MAY-2026 14:00:00
+p_punch_in_time                  -->10-MAY-2026 10:00:00
+p_punch_out_time                 -->10-MAY-2026 14:20:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->10-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->10-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->4.33333333333333333333333333333333333333
+lc_time_in_status                -->LATE
+lc_shift_completed_yn            -->N
+Flexi Scenario 6 --->lc_time_in_status-->LATE ,lc_shift_completed_yn-->N ,Punch Out Time less than Flexi Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->Y
+lc_late_deduction_mins--->90
+lc_early_deduction_mins--->70
+lc_late_deduction_mins-->90
+Punch Date : 10-MAY-2026 Number of occurence : 6 Number of grace attempt used : 1 Late by (Min) : 90 Amount Deducted :     17.23 Calculation Type : FLEXI
+Record Already Exist For Employee : 81031 For Date : 10-MAY-26
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 11-MAY-26
+v_sh_stop_time_st_dt : 11-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 0802
+v_act_stop_time_st : 0400
+v_act_start_time_st_dt : 11-MAY-26
+v_act_stop_time_st_dt : 12-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 19.96666666666666666666666666666666666667
+v_sh_start_time : 420
+v_act_start_time : 482
+v_start_time_diff : 62
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->11-MAY-2026 00:00:00
+p_shift_in_time                  -->11-MAY-2026 07:00:00
+p_shift_out_time                 -->11-MAY-2026 14:00:00
+p_punch_in_time                  -->11-MAY-2026 08:02:00
+p_punch_out_time                 -->12-MAY-2026 04:00:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->11-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->11-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->19.96666666666666666666666666666666666667
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->Y
+lc_late_deduction_yn--->N
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->0
+lc_early_deduction_mins--->0
+v_deduction_flag-->N
+Occurence number:7
+Multiplier:2.5
+Punch Date : 11-MAY-2026 Number of occurence : 6 Number of grace attempt used : 1 Late by (Min) : 62 Amount Deducted :     00.00 Calculation Type : FLEXI
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 12-MAY-26
+v_sh_stop_time_st_dt : 12-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 0744
+v_act_stop_time_st : 1447
+v_act_start_time_st_dt : 12-MAY-26
+v_act_stop_time_st_dt : 12-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 7.05
+v_sh_start_time : 420
+v_act_start_time : 464
+v_start_time_diff : 44
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->12-MAY-2026 00:00:00
+p_shift_in_time                  -->12-MAY-2026 07:00:00
+p_shift_out_time                 -->12-MAY-2026 14:00:00
+p_punch_in_time                  -->12-MAY-2026 07:44:00
+p_punch_out_time                 -->12-MAY-2026 14:47:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->12-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->12-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->7.05
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->Y
+lc_late_deduction_yn--->N
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->0
+lc_early_deduction_mins--->0
+v_deduction_flag-->N
+Occurence number:7
+Multiplier:2.5
+Punch Date : 12-MAY-2026 Number of occurence : 6 Number of grace attempt used : 1 Late by (Min) : 44 Amount Deducted :     00.00 Calculation Type : FLEXI
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 13-MAY-26
+v_sh_stop_time_st_dt : 13-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 0805
+v_act_stop_time_st : 1405
+v_act_start_time_st_dt : 13-MAY-26
+v_act_stop_time_st_dt : 13-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 6
+v_sh_start_time : 420
+v_act_start_time : 485
+v_start_time_diff : 65
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->13-MAY-2026 00:00:00
+p_shift_in_time                  -->13-MAY-2026 07:00:00
+p_shift_out_time                 -->13-MAY-2026 14:00:00
+p_punch_in_time                  -->13-MAY-2026 08:05:00
+p_punch_out_time                 -->13-MAY-2026 14:05:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->13-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->13-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->6
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->N
+Flexi Scenario 2 --->lc_time_in_status-->FLEXI ,lc_shift_completed_yn-->N ,Punch Out Time Greater than or equal to Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->60
+lc_early_deduction_mins--->0
+v_occurence_rep : 7
+v_deduction_flag-->Y
+Occurence number:7
+Multiplier:2.5
+lc_admin_plan_yn-->Y
+Inside admin block
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->13-MAY-2026 00:00:00
+p_shift_in_time                  -->13-MAY-2026 07:00:00
+p_shift_out_time                 -->13-MAY-2026 14:00:00
+p_punch_in_time                  -->13-MAY-2026 08:05:00
+p_punch_out_time                 -->13-MAY-2026 14:05:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->13-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->13-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->6
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->N
+Flexi Scenario 2 --->lc_time_in_status-->FLEXI ,lc_shift_completed_yn-->N ,Punch Out Time Greater than or equal to Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->60
+lc_early_deduction_mins--->0
+lc_late_deduction_mins-->60
+Punch Date : 13-MAY-2026 Number of occurence : 7 Number of grace attempt used : 1 Late by (Min) : 60 Amount Deducted :     11.49 Calculation Type : FLEXI
+Record Already Exist For Employee : 81031 For Date : 13-MAY-26
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : ME07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 14-MAY-26
+v_sh_stop_time_st_dt : 14-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1500
+v_act_start_time_st : 
+v_act_stop_time_st : 
+v_act_start_time_st_dt : 
+v_act_stop_time_st_dt : 
+v_total_shift_hours : 8
+v_total_actual_hours : 
+v_sh_start_time : 420
+v_act_start_time : 
+v_start_time_diff : 
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .06700655
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : Off
+v_holiday_cnt: 0
+c_chk_shift: 1
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : Off
+v_holiday_cnt: 0
+c_chk_shift: 1
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 17-MAY-26
+v_sh_stop_time_st_dt : 17-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 0801
+v_act_stop_time_st : 1419
+v_act_start_time_st_dt : 17-MAY-26
+v_act_stop_time_st_dt : 17-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 6.3
+v_sh_start_time : 420
+v_act_start_time : 481
+v_start_time_diff : 61
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->17-MAY-2026 00:00:00
+p_shift_in_time                  -->17-MAY-2026 07:00:00
+p_shift_out_time                 -->17-MAY-2026 14:00:00
+p_punch_in_time                  -->17-MAY-2026 08:01:00
+p_punch_out_time                 -->17-MAY-2026 14:19:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->17-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->17-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->6.3
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->N
+Flexi Scenario 2 --->lc_time_in_status-->FLEXI ,lc_shift_completed_yn-->N ,Punch Out Time Greater than or equal to Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->42
+lc_early_deduction_mins--->0
+v_occurence_rep : 8
+v_deduction_flag-->Y
+Occurence number:8
+Multiplier:2.5
+lc_admin_plan_yn-->Y
+Inside admin block
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->17-MAY-2026 00:00:00
+p_shift_in_time                  -->17-MAY-2026 07:00:00
+p_shift_out_time                 -->17-MAY-2026 14:00:00
+p_punch_in_time                  -->17-MAY-2026 08:01:00
+p_punch_out_time                 -->17-MAY-2026 14:19:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->17-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->17-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->6.3
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->N
+Flexi Scenario 2 --->lc_time_in_status-->FLEXI ,lc_shift_completed_yn-->N ,Punch Out Time Greater than or equal to Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->42
+lc_early_deduction_mins--->0
+lc_late_deduction_mins-->42
+Punch Date : 17-MAY-2026 Number of occurence : 8 Number of grace attempt used : 1 Late by (Min) : 42 Amount Deducted :     08.04 Calculation Type : FLEXI
+Record Already Exist For Employee : 81031 For Date : 17-MAY-26
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 18-MAY-26
+v_sh_stop_time_st_dt : 18-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 0741
+v_act_stop_time_st : 1400
+v_act_start_time_st_dt : 18-MAY-26
+v_act_stop_time_st_dt : 18-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 6.31666666666666666666666666666666666667
+v_sh_start_time : 420
+v_act_start_time : 461
+v_start_time_diff : 41
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->18-MAY-2026 00:00:00
+p_shift_in_time                  -->18-MAY-2026 07:00:00
+p_shift_out_time                 -->18-MAY-2026 14:00:00
+p_punch_in_time                  -->18-MAY-2026 07:41:00
+p_punch_out_time                 -->18-MAY-2026 14:00:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->18-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->18-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->6.31666666666666666666666666666666666667
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->N
+Flexi Scenario 2 --->lc_time_in_status-->FLEXI ,lc_shift_completed_yn-->N ,Punch Out Time Greater than or equal to Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->41
+lc_early_deduction_mins--->0
+v_occurence_rep : 9
+v_deduction_flag-->Y
+Occurence number:9
+Multiplier:2.5
+lc_admin_plan_yn-->Y
+Inside admin block
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->18-MAY-2026 00:00:00
+p_shift_in_time                  -->18-MAY-2026 07:00:00
+p_shift_out_time                 -->18-MAY-2026 14:00:00
+p_punch_in_time                  -->18-MAY-2026 07:41:00
+p_punch_out_time                 -->18-MAY-2026 14:00:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->18-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->18-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->6.31666666666666666666666666666666666667
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->N
+Flexi Scenario 2 --->lc_time_in_status-->FLEXI ,lc_shift_completed_yn-->N ,Punch Out Time Greater than or equal to Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->41
+lc_early_deduction_mins--->0
+lc_late_deduction_mins-->41
+Punch Date : 18-MAY-2026 Number of occurence : 9 Number of grace attempt used : 1 Late by (Min) : 41 Amount Deducted :     07.85 Calculation Type : FLEXI
+Record Already Exist For Employee : 81031 For Date : 18-MAY-26
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 19-MAY-26
+v_sh_stop_time_st_dt : 19-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 0758
+v_act_stop_time_st : 0400
+v_act_start_time_st_dt : 19-MAY-26
+v_act_stop_time_st_dt : 20-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 20.03333333333333333333333333333333333333
+v_sh_start_time : 420
+v_act_start_time : 478
+v_start_time_diff : 58
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->19-MAY-2026 00:00:00
+p_shift_in_time                  -->19-MAY-2026 07:00:00
+p_shift_out_time                 -->19-MAY-2026 14:00:00
+p_punch_in_time                  -->19-MAY-2026 07:58:00
+p_punch_out_time                 -->20-MAY-2026 04:00:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->19-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->19-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->20.03333333333333333333333333333333333333
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->Y
+lc_late_deduction_yn--->N
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->0
+lc_early_deduction_mins--->0
+v_deduction_flag-->N
+Occurence number:10
+Multiplier:2.5
+Punch Date : 19-MAY-2026 Number of occurence : 9 Number of grace attempt used : 1 Late by (Min) : 58 Amount Deducted :     00.00 Calculation Type : FLEXI
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 20-MAY-26
+v_sh_stop_time_st_dt : 20-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 0747
+v_act_stop_time_st : 0400
+v_act_start_time_st_dt : 20-MAY-26
+v_act_stop_time_st_dt : 21-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 20.21666666666666666666666666666666666667
+v_sh_start_time : 420
+v_act_start_time : 467
+v_start_time_diff : 47
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->20-MAY-2026 00:00:00
+p_shift_in_time                  -->20-MAY-2026 07:00:00
+p_shift_out_time                 -->20-MAY-2026 14:00:00
+p_punch_in_time                  -->20-MAY-2026 07:47:00
+p_punch_out_time                 -->21-MAY-2026 04:00:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->20-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->20-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->20.21666666666666666666666666666666666667
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->Y
+lc_late_deduction_yn--->N
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->0
+lc_early_deduction_mins--->0
+v_deduction_flag-->N
+Occurence number:10
+Multiplier:2.5
+Punch Date : 20-MAY-2026 Number of occurence : 9 Number of grace attempt used : 1 Late by (Min) : 47 Amount Deducted :     00.00 Calculation Type : FLEXI
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : ME07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 21-MAY-26
+v_sh_stop_time_st_dt : 21-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1500
+v_act_start_time_st : 0744
+v_act_stop_time_st : 1554
+v_act_start_time_st_dt : 21-MAY-26
+v_act_stop_time_st_dt : 21-MAY-26
+v_total_shift_hours : 8
+v_total_actual_hours : 8.16666666666666666666666666666666666667
+v_sh_start_time : 420
+v_act_start_time : 464
+v_start_time_diff : 44
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .06700655
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->21-MAY-2026 00:00:00
+p_shift_in_time                  -->21-MAY-2026 07:00:00
+p_shift_out_time                 -->21-MAY-2026 15:00:00
+p_punch_in_time                  -->21-MAY-2026 07:44:00
+p_punch_out_time                 -->21-MAY-2026 15:54:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->21-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->21-MAY-2026 16:30:00
+ln_total_shift_hours             -->8
+ln_total_punch_hours             -->8.16666666666666666666666666666666666667
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->Y
+lc_late_deduction_yn--->N
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->0
+lc_early_deduction_mins--->0
+v_deduction_flag-->N
+Occurence number:10
+Multiplier:2.5
+Punch Date : 21-MAY-2026 Number of occurence : 9 Number of grace attempt used : 1 Late by (Min) : 44 Amount Deducted :     00.00 Calculation Type : FLEXI
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : Off
+v_holiday_cnt: 0
+c_chk_shift: 1
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : Off
+v_holiday_cnt: 0
+c_chk_shift: 1
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 24-MAY-26
+v_sh_stop_time_st_dt : 24-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 0903
+v_act_stop_time_st : 1400
+v_act_start_time_st_dt : 24-MAY-26
+v_act_stop_time_st_dt : 24-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 4.95
+v_sh_start_time : 420
+v_act_start_time : 543
+v_start_time_diff : 123
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->24-MAY-2026 00:00:00
+p_shift_in_time                  -->24-MAY-2026 07:00:00
+p_shift_out_time                 -->24-MAY-2026 14:00:00
+p_punch_in_time                  -->24-MAY-2026 09:03:00
+p_punch_out_time                 -->24-MAY-2026 14:00:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->24-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->24-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->4.95
+lc_time_in_status                -->LATE
+lc_shift_completed_yn            -->N
+Flexi Scenario 6 --->lc_time_in_status-->LATE ,lc_shift_completed_yn-->N ,Punch Out Time less than Flexi Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->Y
+lc_late_deduction_mins--->33
+lc_early_deduction_mins--->90
+v_occurence_rep : 10
+v_deduction_flag-->Y
+Occurence number:10
+Multiplier:2.5
+lc_admin_plan_yn-->Y
+Inside admin block
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->24-MAY-2026 00:00:00
+p_shift_in_time                  -->24-MAY-2026 07:00:00
+p_shift_out_time                 -->24-MAY-2026 14:00:00
+p_punch_in_time                  -->24-MAY-2026 09:03:00
+p_punch_out_time                 -->24-MAY-2026 14:00:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->24-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->24-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->4.95
+lc_time_in_status                -->LATE
+lc_shift_completed_yn            -->N
+Flexi Scenario 6 --->lc_time_in_status-->LATE ,lc_shift_completed_yn-->N ,Punch Out Time less than Flexi Shift Out Time
+lc_late_deduction_yn--->Y
+lc_early_deduction_yn--->Y
+lc_late_deduction_mins--->33
+lc_early_deduction_mins--->90
+lc_late_deduction_mins-->33
+Punch Date : 24-MAY-2026 Number of occurence : 10 Number of grace attempt used : 1 Late by (Min) : 33 Amount Deducted :     06.32 Calculation Type : FLEXI
+Record Already Exist For Employee : 81031 For Date : 24-MAY-26
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 25-MAY-26
+v_sh_stop_time_st_dt : 25-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 
+v_act_stop_time_st : 
+v_act_start_time_st_dt : 
+v_act_stop_time_st_dt : 
+v_total_shift_hours : 7
+v_total_actual_hours : 
+v_sh_start_time : 420
+v_act_start_time : 
+v_start_time_diff : 
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 1
+c_chk_shift: 0
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 1
+c_chk_shift: 0
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : ME07
+v_holiday_cnt: 1
+c_chk_shift: 0
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : Off
+v_holiday_cnt: 1
+c_chk_shift: 1
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : Off
+v_holiday_cnt: 0
+c_chk_shift: 1
+lc_admin_plan_yn-->Y
+lc_calculation_type-->FLEXI
+v_person_id : 15832
+v_payroll_id : 181
+v_shift_name : MS07
+v_holiday_cnt: 0
+c_chk_shift: 0
+v_sh_start_time_st_dt : 31-MAY-26
+v_sh_stop_time_st_dt : 31-MAY-26
+v_sh_start_time_st : 0700
+v_sh_stop_time_st : 1400
+v_act_start_time_st : 0747
+v_act_stop_time_st : 1454
+v_act_start_time_st_dt : 31-MAY-26
+v_act_stop_time_st_dt : 31-MAY-26
+v_total_shift_hours : 7
+v_total_actual_hours : 7.11666666666666666666666666666666666667
+v_sh_start_time : 420
+v_act_start_time : 467
+v_start_time_diff : 47
+v_grace_time : 15
+v_grace_attempt : 4
+v_basic_sal : 643.26288
+v_days : 31
+v_1_min_basic_sal : .0765789142857142857142857142857142857143
+<-------get_flexi_late_early_dtls starts------>
+lc_late_deduction_yn             -->16094
+lc_late_deduction_yn             -->31-MAY-2026 00:00:00
+p_shift_in_time                  -->31-MAY-2026 07:00:00
+p_shift_out_time                 -->31-MAY-2026 14:00:00
+p_punch_in_time                  -->31-MAY-2026 07:47:00
+p_punch_out_time                 -->31-MAY-2026 14:54:00
+lc_payroll_name                  -->Cargo Payroll
+lc_flexi_cutover_date            -->01-Feb-2019
+lc_flexi_late_mins               -->90
+lc_flexi_early_mins              -->90
+ld_flexi_shift_in_time           -->31-MAY-2026 08:30:00
+ld_flexi_shift_out_time          -->31-MAY-2026 15:30:00
+ln_total_shift_hours             -->7
+ln_total_punch_hours             -->7.11666666666666666666666666666666666667
+lc_time_in_status                -->FLEXI
+lc_shift_completed_yn            -->Y
+lc_late_deduction_yn--->N
+lc_early_deduction_yn--->N
+lc_late_deduction_mins--->0
+lc_early_deduction_mins--->0
+v_deduction_flag-->N
+Occurence number:11
+Multiplier:2.5
+Punch Date : 31-MAY-2026 Number of occurence : 10 Number of grace attempt used : 1 Late by (Min) : 47 Amount Deducted :     00.00 Calculation Type : FLEXI
++---------------------------------------------------------------------------+
+End of log messages from FND_FILE
++---------------------------------------------------------------------------+
+
+
++---------------------------------------------------------------------------+
+No completion options were requested.
+
+Output file size: 
+0
+Deleting empty output file.
+
++---------------------------------------------------------------------------+
+Concurrent request completed successfully
+Current system time is 14-JUL-2026 15:25:55
+
++---------------------------------------------------------------------------+
