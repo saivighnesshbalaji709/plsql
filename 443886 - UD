@@ -1,0 +1,147 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+Understanding Document
+  Version 1.0
+
+		SR #443886
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Document Control
+
+Change Record
+
+Date	Author	Version	Change Reference
+			
+14-Jul-2026	Sai Vighnessh B L	1.0	Initial Document
+			
+
+Reviewers
+Name	Position
+Pra	
+Pranob Ishar	Project Manager
+	
+	
+	
+
+
+Distribution
+Copy No.	Name	Location
+		
+1			Library Master		Project Library
+2					
+3					
+4			
+
+
+Table of Contents
+PURPOSE OF THE DOCUMENT	4
+1	USER DESCRIPTION OF THE PROBLEM	5
+2	HEXAWARE UNDERSTANDING OF THE SR	5
+3	HEXAWARE SOLUTION	5
+4	ASSUMPTIONS	5
+5	APPROVAL	6
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+PURPOSE OF THE DOCUMENT
+The purpose of this document is to describe the SR understanding in detail. This document has been created to avoid any misunderstanding during the SR discussion over the phone, in person, or via email. This document will also serve the purpose of filling any communication gap and making sure the exact requirement is captured and understood by Hexaware SME and Analysts agree with it. 
+1	USER DESCRIPTION OF THE PROBLEM
+
+Issue Headline:
+443886 - Request to Activate Off-in-Lieu Balance for TRANSOM Catering.
+
+Description:
+The purpose is to modify the existing program named ‘OA HR Add Public Holiday to Off In Lieu Bank Balance’ to include TRANSOM Catering (Catering Payroll) for maintaining Off In Lieu Bank balance of Non-Flying and Shift Staff. Also, to enable the existing leave type named ‘Off In Lieu Bank’ created for Non-Flying and Shift Staff for TRANSOM Catering (Catering Payroll).
+Also, create a new program 'OA Custom HR Off in Lieu Request to Off in Lieu Bank Adjustment' that will be like the existing program 'OA Custom HR Off in Lieu Annual Leave Adjustment' but the leave adjustment will be done to ‘Off in Lieu Bank’ accrual balance instead of Annual Leave Balance. This will be for TRANSOM Catering (Catering Payroll) only.
+Modify the existing program 'OA Custom HR Off in Lieu Annual Leave Adjustment' so that TRANSOM Catering (Catering Payroll) is excluded from this program.
+
+2	HEXAWARE UNDERSTANDING OF THE SR
+The requirement is to modify the existing program named ‘OA HR Add Public Holiday to Off In Lieu Bank Balance’ to include TRANSOM Catering (Catering Payroll) for maintaining Off In Lieu Bank balance of Non-Flying and Shift Staff. Also, to enable the existing leave type named ‘Off In Lieu Bank’ created for Non-Flying and Shift Staff for TRANSOM Catering (Catering Payroll).
+The accrual plan ‘Off In Lieu Bank Balance’ needs to be enabled for TRANSOM Catering (Catering Payroll).
+For the leave type 'Off In Lieu Bank', the configuration for validations will like the existing one for Catering Payroll. For approvals, currently it is going for 2 levels of approvals – 
+1st Level  Supervisor
+2nd Level  Line Manager
+Also, create a new program 'OA Custom HR Off in Lieu Request to Off in Lieu Bank Adjustment' that will be like the existing program 'OA Custom HR Off in Lieu Annual Leave Adjustment' but the leave adjustment will be done to ‘Off in Lieu Bank’ accrual balance instead of Annual Leave Balance. This will be for TRANSOM Catering (Catering Payroll) only.
+Modify the existing program 'OA Custom HR Off in Lieu Annual Leave Adjustment' so that TRANSOM Catering (Catering Payroll) is excluded from this program.
+
+
+
+
+
+
+
+3	HEXAWARE SOLUTION
+Below are the solutions to meet the requirements – 
+1.	Create element link for the existing element ‘Off In Lieu Bank’ effective from 01-JAN-2026. The link should be with Shift Employee in Group and Catering Payroll.
+2.	Create element link for the existing element ‘Off In Lieu Bank Adjustments’ effective from 01-JAN-2026. The link should be with Catering Payroll only.
+3.	Create element link for the existing element ‘Off In Lieu Bank Carry Over’ effective from 01-JAN-2026. The link should be with Catering Payroll only.
+4.	Create element link for the existing element ‘Retro Off In Lieu Bank’ effective from 01-JAN-2026. The link should be with Catering Payroll only.
+5.	Create element link for the existing element ‘Off In Lieu Bank Balance’ effective from 01-JAN-2026. The link should be with Shift Employee in Group and Catering Payroll. Click on Standard Checkbox to enable it so that this element is automatically added to the element entries of shift employees from Catering Payroll.
+6.	Create element link for the existing element ‘Off In Lieu Bank Balance Carried Over’ effective from 01-JAN-2026. The link should be with Shift Employee in Group and Catering Payroll.
+7.	Create element link for the existing element ‘Off In Lieu Bank Balance Payroll Balance’ effective from 01-JAN-2026. The link should be with Shift Employee in Group and Catering Payroll.
+8.	Create element link for the existing element ‘Off In Lieu Bank Balance Residual’ effective from 01-JAN-2026. The link should be with Shift Employee in Group and Catering Payroll.
+9.	Create element link for the existing element ‘Off In Lieu Bank Balance Tagging’ effective from 01-JAN-2026. The link should be with Shift Employee in Group and Catering Payroll.
+10.	Update the package ‘xxoa_absence_duration’ to include Catering Payroll in the validation to include public holidays when applying the ‘Off In Lieu bank’ leave.
+11.	Currently in the package ‘xxoa_absence_duration’ validation is in place so that ‘Off In Lieu bank’ leave can only be applied by shift employees, this needs to be modified so that for Catering Payroll, this leave should be applicable by both regular and shift employees. Also, the existing grade validations need to be changed so that all grades from Catering Payroll should be able to apply for this leave. For this create new lookups called ‘XXOA_OFFIN_LIEU_EMP_TYPE_CAT’ and ‘XXOA_OFFIN_LIEU_EMP_GRADES_CAT’.
+12.	 Modify the program ‘OA HR Add Public Holiday to Off In Lieu Bank Balance’ to include the new lookups ‘XXOA_OFFIN_LIEU_EMP_TYPE_CAT’ and ‘XXOA_OFFIN_LIEU_EMP_GRADES_CAT’.
+13.	Create a new program 'OA Custom HR Off in Lieu Request to Off in Lieu Bank Adjustment' that will be like the existing program 'OA Custom HR Off in Lieu Annual Leave Adjustment' but the leave adjustment will be done to ‘Off in Lieu Bank’ accrual balance instead of Annual Leave Balance. This will be for TRANSOM Catering (Catering Payroll) only.
+14.	Modify the existing program 'OA Custom HR Off in Lieu Annual Leave Adjustment' so that TRANSOM Catering (Catering Payroll) is excluded from this program. Exclude Catering Payroll from the package xxoa_add_ph_to_al_acc.
+
+
+
+
+4	ASSUMPTIONS
+1.	‘Off In Lieu Bank’ leave type will be both added by the regular and shift employees of Catering payroll.
+2.	There will be no leave encashment for the available leave balance for ‘Off In Lieu Bank Balance’.
+3.	There will be no leave provision liability calculations for ‘Off In Lieu Bank’ in the system.
+4.	There are no flying staffs in Catering payroll and hence this group of employees are not included in any validations of any programs.
+5.	There will be no carry over of the ‘Off In Lieu Bank Balance’ to the next year and all the available balance at the end of the year will expire.
+6.	PH will be transferred to ‘Off In Lieu Bank Balance’ only for shift employees.
+7.	Off in Lieu Request SIT approvals will be transferred to ‘Off In Lieu Bank Balance’ for both shift and regular employees.
+
+Approver’s Comments:
+
+Approver’s Name:   								          Date: 14-Jul-2026
