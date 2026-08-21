@@ -1,0 +1,4 @@
+Core HR	Positive	OA HR Employee Relations	Medium	Run the custom report 'OA Custom HR Employee National Report' from as user having access to XXOA Base Payroll security profile only	Run the empoyee national report	Employee record exists	"1. Navigate to 'OA HR Employee Relations'
+2. People
+3. View
+4. Request"		Run the report with only the mandatory parameter. The report should show employees from Base Payroll only, no executive payroll or unclassified payrol employees should come this report
