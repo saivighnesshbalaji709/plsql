@@ -339,8 +339,8 @@ SELECT * FROM(SELECT xrsdt.ATTRIBUTE5,
          AND xrdt.item_code = msib.segment1
          AND msib.organization_id = 86)
  WHERE 1 = 1
-  AND action_date BETWEEN NVL(TO_DATE(from_date_cp, 'DD-MON-RRRR'),'01-JAN-1951')
-         AND NVL(TO_DATE(to_date_cp, 'DD-MON-RRRR'), '31-DEC-4712')
+  AND action_date BETWEEN NVL(from_date_cp, TO_DATE('01-JAN-1951','DD-MON-RRRR')) --Fixed ORA-01843: from_date_cp is already DATE, no re-conversion needed
+         AND NVL(to_date_cp, TO_DATE('31-DEC-4712','DD-MON-RRRR')) --Fixed ORA-01843: to_date_cp is already DATE, no re-conversion needed
  AND person_id in  (select distinct person_id from
 (SELECT  papf.person_id
   FROM per_all_people_f papf,
@@ -581,8 +581,8 @@ SELECT  papf.person_id
          AND xrdt.item_code = msib.segment1
          AND msib.organization_id = 86)
  WHERE 1 = 1
-  AND action_date  BETWEEN NVL(TO_DATE(from_date_cp, 'DD-MON-RRRR'),'01-JAN-1951')
-  AND NVL(TO_DATE(to_date_cp, 'DD-MON-RRRR'), '31-DEC-4712')
+  AND action_date  BETWEEN NVL(from_date_cp, TO_DATE('01-JAN-1951','DD-MON-RRRR')) --Fixed ORA-01843: from_date_cp is already DATE, no re-conversion needed
+  AND NVL(to_date_cp, TO_DATE('31-DEC-4712','DD-MON-RRRR')) --Fixed ORA-01843: to_date_cp is already DATE, no re-conversion needed
   AND EXISTS
               (SELECT 1
                  FROM fnd_user fu
