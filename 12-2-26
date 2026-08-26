@@ -1,28 +1,415 @@
--- Step 1: department/section this staff member belonged to AT THE TIME UMS-233378 was raised
-SELECT xrht.req_number,
-       xrht.req_date,
-       papf.employee_number,
-       papf.full_name,
-       paaf.organization_id                AS org_id_at_req_date,
-       haou.name                           AS section_at_req_date,
-       (SELECT haou1.name
-          FROM hr_all_organization_units haou1,
-               per_org_structure_elements pose,
-               per_organization_structures pos
-         WHERE haou1.organization_id = pose.organization_id_parent
-           AND pos.name = 'OA HQ Organization Hieararchy'
-           AND pose.org_structure_version_id = pos.organization_structure_id
-           AND pose.organization_id_child = paaf.organization_id) AS department_at_req_date
-FROM xxum_request_header_tb xrht,
-     per_all_people_f        papf,
-     per_all_assignments_f   paaf,
-     hr_all_organization_units haou
-WHERE xrht.req_number = 'UMS-233378'
-  AND papf.person_id = xrht.person_id
-  AND papf.person_id = paaf.person_id
-  AND TRUNC(xrht.req_date) BETWEEN papf.effective_start_date AND papf.effective_end_date
-  AND TRUNC(xrht.req_date) BETWEEN paaf.effective_start_date AND paaf.effective_end_date
-  AND papf.current_employee_flag = 'Y'
-  AND paaf.primary_flag = 'Y'
-  AND paaf.assignment_type = 'E'
-  AND paaf.organization_id = haou.organization_id;
+-- Standalone test version of cur_month_issue, extracted from XXUMS_MONTH_ISSUE_PKG_PB
+-- All bind-variable/parameter confusion removed:
+--   from_date_cp  -> literal TO_DATE('01-01-2026','DD-MM-YYYY')   (change the date, keep the mask)
+--   to_date_cp    -> literal TO_DATE('26-08-2026','DD-MM-YYYY')   (change the date, keep the mask)
+--   p_employee_id -> literal 12345                                 (replace with a real person_id)
+-- Just edit the three literals below directly in this text and run -- no prompts, no session
+-- NLS_DATE_FORMAT dependency, nothing to bind.
+
+SELECT * FROM (
+SELECT * FROM(SELECT xrsdt.ATTRIBUTE5,
+         --TO_DATE(xrsdt.ACTION_DATE, 'DD-MON-RRRR') ACTION_DATE,
+         xrsdt.ACTION_DATE,
+         xrht.REQ_NUMBER,
+         TRUNC(xrht.req_date) req_date,
+         xrsdt.attribute9 ITEM_SIZE,
+       (SELECT meaning
+         FROM fnd_lookup_values
+        WHERE lookup_type = 'XXUM_REQUEST_TYPES'
+            AND language = 'US'
+            AND lookup_code = xrht.req_type) transaction_type,
+         'OMAN AIR' staff_category,
+         papf.employee_number staff_number,
+         papf.full_name staff_name,
+         papf.person_id,
+         pap.name position_name,
+         (SELECT haou1.NAME
+            FROM hr_all_organization_units haou1,
+                 per_org_structure_elements pose,
+                 per_organization_structures pos
+           WHERE     1 = 1
+                 AND haou1.organization_id = pose.organization_id_parent
+                 AND pos.name = 'OA HQ Organization Hieararchy'
+                 AND pose.org_structure_version_id =
+                        pos.organization_structure_id
+                 AND pose.organization_id_child = haou.organization_id)
+            DEPARTMENT,
+         haou.NAME SECTION,
+          (SELECT haou1.organization_id
+            FROM hr_all_organization_units haou1,
+                 per_org_structure_elements pose,
+                 per_organization_structures pos
+           WHERE     1 = 1
+                 AND haou1.organization_id = pose.organization_id_parent
+                 AND pos.name = 'OA HQ Organization Hieararchy'
+                 AND pose.org_structure_version_id =
+                        pos.organization_structure_id
+                 AND pose.organization_id_child = haou.organization_id) department_id,
+         haou.organization_id section_id,
+         paaf.payroll_id,
+         (select payroll_name from pay_all_payrolls_f where payroll_id=paaf.payroll_id) payroll_name,
+         xrdt.item_code,
+         xrdt.item_description,
+         DECODE (xrsdt.attribute3, 'Y', 'Yes', 'No') oman_air_inventory,
+         NVL(xrsdt.quantity_selected, 0) QUANTITY,
+         CASE WHEN  DECODE (xrsdt.attribute3, 'Y', 'Yes', 'No')  = 'Yes' THEN
+          (SELECT 0 FROM dual)
+          ELSE
+           NVL(msib.list_price_per_unit, 0)
+         END unit_rate,
+          CASE WHEN  DECODE (xrsdt.attribute3, 'Y', 'Yes', 'No')  = 'Yes' THEN
+          (SELECT 0 FROM dual)
+          ELSE
+           NVL(xrsdt.quantity_selected, 0) * NVL(msib.list_price_per_unit, 0)
+         END AMOUNT
+    FROM per_all_people_f papf,
+         per_all_assignments_f paaf,
+         per_all_positions pap,
+         xxum_request_details_tb xrdt,
+         xxum_request_sub_details_tb xrsdt,
+         hr_all_organization_units haou,
+         xxum_request_header_tb xrht,
+         mtl_system_items_b msib
+   WHERE 1 = 1
+         AND papf.person_id = paaf.person_id
+         AND papf.person_id = xrht.person_id
+         AND xrht.req_header_id = xrdt.req_header_id
+         AND xrdt.req_details_id = xrsdt.req_details_id
+         AND xrsdt.req_sub_details_id = xrsdt.req_sub_details_id
+         AND xrsdt.attribute2 = 'INTERFACED'
+         AND xrht.req_type  IN ('YE','SP')
+         AND xrht.status IN ('IF', 'IP')
+         AND paaf.organization_id = haou.organization_id
+         AND paaf.position_id = pap.position_id
+         AND xrdt.item_description = msib.description
+         AND xrdt.item_code = msib.segment1
+         AND msib.organization_id = 86
+         AND TRUNC (xrht.req_date) BETWEEN papf.effective_start_date
+         AND papf.effective_end_date
+         AND TRUNC (xrht.req_date) BETWEEN paaf.effective_start_date
+         AND paaf.effective_end_date
+         AND papf.current_employee_flag = 'Y'
+         AND paaf.primary_flag = 'Y'
+         AND paaf.assignment_type = 'E'
+ UNION ALL
+ SELECT xrsdt.ATTRIBUTE5,
+            --TO_DATE(xrsdt.ACTION_DATE, 'DD-MON-RRRR') ACTION_DATE,
+            xrsdt.ACTION_DATE,
+            xrht.REQ_NUMBER,
+            TRUNC(xrht.req_date) req_date,
+            xrsdt.attribute9 ITEM_SIZE,
+            (SELECT meaning
+              FROM fnd_lookup_values
+            WHERE lookup_type = 'XXUM_REQUEST_TYPES'
+                AND language = 'US'
+                AND lookup_code = xrht.req_type) transaction_type,
+            xggs.attribute1 staff_category,
+            xggs.staff_number staff_number,
+            xggs.title||xggs.first_name||' '||xggs.last_name staff_name,
+            xggs.person_id,
+            xggs.position position_name,
+            xggs.department DEPARTMENT,
+            xggs.department SECTION,
+            xggs.department_id,
+            xggs.department_id section_id,
+            0 payroll_id,
+            null payroll_name,
+            xrdt.item_code,
+            xrdt.item_description,
+           DECODE (xrsdt.attribute3, 'Y', 'Yes', 'No') oman_air_inventory,
+         NVL(xrsdt.quantity_selected, 0) QUANTITY,
+         CASE WHEN  DECODE (xrsdt.attribute3, 'Y', 'Yes', 'No')  = 'Yes' THEN
+          (SELECT 0 FROM dual)
+          ELSE
+           NVL(msib.list_price_per_unit, 0)
+         END unit_rate,
+          CASE WHEN  DECODE (xrsdt.attribute3, 'Y', 'Yes', 'No')  = 'Yes' THEN
+          (SELECT 0 FROM dual)
+          ELSE
+           NVL(xrsdt.quantity_selected, 0) * NVL(msib.list_price_per_unit, 0)
+         END AMOUNT
+    FROM xxums.xxum_gsa_gha_staff xggs,
+         xxum_request_details_tb xrdt,
+         xxum_request_sub_details_tb xrsdt,
+         xxum_request_header_tb xrht,
+         mtl_system_items_b msib
+   WHERE 1 = 1
+         AND xggs.person_id = xrht.person_id
+         AND xrht.req_header_id = xrdt.req_header_id
+         AND xrdt.req_details_id = xrsdt.req_details_id
+         AND xrsdt.req_sub_details_id = xrsdt.req_sub_details_id
+         AND xrsdt.attribute2 = 'INTERFACED'
+         AND xrht.req_type  IN ('YE','SP')
+         AND xrht.status IN ('IF', 'IP')
+         AND xrdt.item_description = msib.description
+         AND xrdt.item_code = msib.segment1
+         AND msib.organization_id = 86)
+ WHERE 1 = 1
+  /*AND action_date BETWEEN NVL(TO_DATE('01-01-2025','DD-MM-YYYY'), TO_DATE('01-JAN-1951','DD-MON-RRRR')) --Fixed ORA-01843: TO_DATE('01-01-2026','DD-MM-YYYY') is already DATE, no re-conversion needed
+         AND NVL(TO_DATE('29-11-2025','DD-MM-YYYY'), TO_DATE('31-DEC-4712','DD-MON-RRRR')) */
+         AND action_date >= NVL(TO_DATE(:from_date_cp,'DD-MON-RRRR'),
+                         DATE '1951-01-01') 
+  AND action_date < NVL(TO_DATE(:to_date_cp,'DD-MON-RRRR') + 1,
+                        DATE '4712-12-31')
+ AND person_id in  (select distinct person_id from
+(SELECT  papf.person_id
+  FROM per_all_people_f papf,
+       per_all_assignments_f paaf,
+       hr_all_organization_units haou
+ WHERE 1 = 1
+        AND (TRUNC(req_date) BETWEEN papf.effective_start_date
+                       AND papf.effective_end_date) --Modified per coordinator-visibility fix (SR): restrict to dept as of request date only, not current dept
+       AND papf.person_id = paaf.person_id
+       AND papf.current_employee_flag = 'Y'
+        AND (TRUNC(req_date) BETWEEN paaf.effective_start_date
+                       AND paaf.effective_end_date) --Modified per coordinator-visibility fix (SR): restrict to dept as of request date only, not current dept
+       AND paaf.primary_flag = 'Y'
+       AND paaf.assignment_type = 'E'
+       AND haou.organization_id = paaf.organization_id
+       AND paaf.organization_id IN
+              (SELECT pose.organization_id_child
+                 FROM hr_all_organization_units haou1,
+                      per_org_structure_elements pose,
+                      per_organization_structures pos
+                WHERE     1 = 1
+                      AND haou1.organization_id = pose.organization_id_parent
+                      AND pos.name = 'OA HQ Organization Hieararchy'
+                      AND pose.org_structure_version_id =
+                             pos.organization_structure_id
+                      AND pose.organization_id_parent =
+                             (SELECT pose.organization_id_parent
+                                FROM hr_all_organization_units haou1,
+                                     per_org_structure_elements pose,
+                                     per_organization_structures pos
+                               WHERE 1 = 1
+                                     AND haou1.organization_id =
+                                            pose.organization_id_child
+                                     AND pos.name =
+                                            'OA HQ Organization Hieararchy'
+                                     AND pose.org_structure_version_id =
+                                            pos.organization_structure_id
+                                     AND pose.organization_id_child =
+                                            (SELECT organization_id
+                                               FROM per_all_assignments_f
+                                              WHERE person_id = :p_employee_id /* <-- REPLACE with the real person_id you want to test */
+                                                    AND TRUNC (SYSDATE) BETWEEN effective_start_date
+                                                                            AND effective_end_date
+AND primary_flag = 'Y')))
+union
+SELECT  papf.person_id
+  FROM per_all_people_f papf,
+       per_all_assignments_f paaf,
+       hr_all_organization_units haou
+WHERE 1 = 1
+        AND (TRUNC(req_date) BETWEEN papf.effective_start_date
+                       AND papf.effective_end_date) --Modified per coordinator-visibility fix (SR): restrict to dept as of request date only, not current dept
+       AND papf.person_id = paaf.person_id
+       AND papf.current_employee_flag = 'Y'
+        AND (TRUNC(req_date) BETWEEN paaf.effective_start_date
+                       AND paaf.effective_end_date) --Modified per coordinator-visibility fix (SR): restrict to dept as of request date only, not current dept
+       AND paaf.primary_flag = 'Y'
+       AND paaf.assignment_type = 'E'
+       AND haou.organization_id = paaf.organization_id
+       AND paaf.organization_id IN
+              (SELECT pose.organization_id_child
+                 FROM hr_all_organization_units haou1,
+                      per_org_structure_elements pose,
+                      per_organization_structures pos
+                WHERE     1 = 1
+                      AND haou1.organization_id = pose.organization_id_parent
+                      AND pos.name = 'OA HQ Organization Hieararchy'
+                      AND pose.org_structure_version_id =
+                             pos.organization_structure_id
+                      AND pose.organization_id_parent = (SELECT organization_id
+                                               FROM per_all_assignments_f
+                                              WHERE person_id = :p_employee_id  /* <-- REPLACE with the real person_id you want to test */
+                                                    AND TRUNC (SYSDATE) BETWEEN effective_start_date
+                                                                            AND effective_end_date
+AND primary_flag = 'Y'))
+UNION
+SELECT  papf.person_id
+  FROM per_all_people_f papf, per_all_assignments_f paaf, hr_all_organization_units haou
+ WHERE 1 = 1
+        AND ((TRUNC(req_date) BETWEEN papf.effective_start_date
+                       AND papf.effective_end_date) OR (SYSDATE BETWEEN papf.effective_start_date
+                       AND papf.effective_end_date))
+       AND papf.person_id = paaf.person_id
+       AND papf.current_employee_flag = 'Y'
+        AND ((TRUNC(req_date) BETWEEN paaf.effective_start_date
+                       AND paaf.effective_end_date) OR (SYSDATE BETWEEN paaf.effective_start_date
+                       AND paaf.effective_end_date ))
+       AND paaf.primary_flag = 'Y'
+       AND paaf.assignment_type = 'E'
+       AND paaf.organization_id=haou.organization_id
+       AND EXISTS
+              (SELECT 1
+                 FROM per_all_people_f papf, fnd_lookup_values flv1
+                WHERE papf.person_id = :p_employee_id  /* <-- REPLACE with the real person_id you want to test */
+                      AND papf.employee_number = flv1.meaning
+                      AND TRUNC (SYSDATE) BETWEEN effective_start_date
+                                              AND effective_end_date
+                      AND current_employee_flag = 'Y'
+                      AND flv1.lookup_type = 'XXUMS_ADMIN'
+                      AND flv1.language = 'US')
+                      )
+
+                      )
+  UNION
+  SELECT * FROM(SELECT xrsdt.ATTRIBUTE5,
+         --TO_DATE(xrsdt.ACTION_DATE, 'DD-MON-RRRR') ACTION_DATE,
+         xrsdt.ACTION_DATE,
+         xrht.REQ_NUMBER,
+         TRUNC(xrht.req_date) req_date,
+         xrsdt.attribute9 ITEM_SIZE,
+       (SELECT meaning
+         FROM fnd_lookup_values
+        WHERE lookup_type = 'XXUM_REQUEST_TYPES'
+            AND language = 'US'
+            AND lookup_code = xrht.req_type) transaction_type,
+         'OMAN AIR' staff_category,
+         papf.employee_number staff_number,
+         papf.full_name staff_name,
+         papf.person_id,
+         pap.name position_name,
+         (SELECT haou1.NAME
+            FROM hr_all_organization_units haou1,
+                 per_org_structure_elements pose,
+                 per_organization_structures pos
+           WHERE     1 = 1
+                 AND haou1.organization_id = pose.organization_id_parent
+                 AND pos.name = 'OA HQ Organization Hieararchy'
+                 AND pose.org_structure_version_id =
+                        pos.organization_structure_id
+                 AND pose.organization_id_child = haou.organization_id)
+            DEPARTMENT,
+         haou.NAME SECTION,
+          (SELECT haou1.organization_id
+            FROM hr_all_organization_units haou1,
+                 per_org_structure_elements pose,
+                 per_organization_structures pos
+           WHERE     1 = 1
+                 AND haou1.organization_id = pose.organization_id_parent
+                 AND pos.name = 'OA HQ Organization Hieararchy'
+                 AND pose.org_structure_version_id =
+                        pos.organization_structure_id
+                 AND pose.organization_id_child = haou.organization_id) department_id,
+         haou.organization_id section_id,
+         paaf.payroll_id,
+         (select payroll_name from pay_all_payrolls_f where payroll_id=paaf.payroll_id) payroll_name,
+         xrdt.item_code,
+         xrdt.item_description,
+         DECODE (xrsdt.attribute3, 'Y', 'Yes', 'No') oman_air_inventory,
+         NVL(xrsdt.quantity_selected, 0) QUANTITY,
+         CASE WHEN  DECODE (xrsdt.attribute3, 'Y', 'Yes', 'No')  = 'Yes' THEN
+          (SELECT 0 FROM dual)
+          ELSE
+           NVL(msib.list_price_per_unit, 0)
+         END unit_rate,
+          CASE WHEN  DECODE (xrsdt.attribute3, 'Y', 'Yes', 'No')  = 'Yes' THEN
+          (SELECT 0 FROM dual)
+          ELSE
+           NVL(xrsdt.quantity_selected, 0) * NVL(msib.list_price_per_unit, 0)
+         END AMOUNT
+    FROM per_all_people_f papf,
+         per_all_assignments_f paaf,
+         per_all_positions pap,
+         xxum_request_details_tb xrdt,
+         xxum_request_sub_details_tb xrsdt,
+         hr_all_organization_units haou,
+         xxum_request_header_tb xrht,
+         mtl_system_items_b msib
+   WHERE 1 = 1
+         AND papf.person_id = paaf.person_id
+         AND papf.person_id = xrht.person_id
+         AND xrht.req_header_id = xrdt.req_header_id
+         AND xrdt.req_details_id = xrsdt.req_details_id
+         AND xrsdt.req_sub_details_id = xrsdt.req_sub_details_id
+         AND xrsdt.attribute2 = 'INTERFACED'
+         AND xrht.req_type  IN ('YE','SP')
+         AND xrht.status IN ('IF', 'IP')
+         AND paaf.organization_id = haou.organization_id
+         AND paaf.position_id = pap.position_id
+         AND xrdt.item_description = msib.description
+         AND xrdt.item_code = msib.segment1
+         AND msib.organization_id = 86
+         AND TRUNC (xrht.req_date) BETWEEN papf.effective_start_date
+         AND papf.effective_end_date
+         AND TRUNC (xrht.req_date) BETWEEN paaf.effective_start_date
+         AND paaf.effective_end_date
+         AND papf.current_employee_flag = 'Y'
+         AND paaf.primary_flag = 'Y'
+         AND paaf.assignment_type = 'E'
+ UNION ALL
+ SELECT xrsdt.ATTRIBUTE5,
+            --TO_DATE(xrsdt.ACTION_DATE, 'DD-MON-RRRR') ACTION_DATE,
+            xrsdt.ACTION_DATE,
+            xrht.REQ_NUMBER,
+            TRUNC(xrht.req_date) req_date,
+            xrsdt.attribute9 ITEM_SIZE,
+            (SELECT meaning
+              FROM fnd_lookup_values
+            WHERE lookup_type = 'XXUM_REQUEST_TYPES'
+                AND language = 'US'
+                AND lookup_code = xrht.req_type) transaction_type,
+            xggs.attribute1 staff_category,
+            xggs.staff_number staff_number,
+            xggs.title||xggs.first_name||' '||xggs.last_name staff_name,
+            xggs.person_id,
+            xggs.position position_name,
+            xggs.department DEPARTMENT,
+            xggs.department SECTIOfN,
+            xggs.department_id,
+            xggs.department_id section_id,
+            0 payroll_id,
+            null payroll_name,
+            xrdt.item_code,
+            xrdt.item_description,
+           DECODE (xrsdt.attribute3, 'Y', 'Yes', 'No') oman_air_inventory,
+         NVL(xrsdt.quantity_selected, 0) QUANTITY,
+         CASE WHEN  DECODE (xrsdt.attribute3, 'Y', 'Yes', 'No')  = 'Yes' THEN
+          (SELECT 0 FROM dual)
+          ELSE
+           NVL(msib.list_price_per_unit, 0)
+         END unit_rate,
+          CASE WHEN  DECODE (xrsdt.attribute3, 'Y', 'Yes', 'No')  = 'Yes' THEN
+          (SELECT 0 FROM dual)
+          ELSE
+           NVL(xrsdt.quantity_selected, 0) * NVL(msib.list_price_per_unit, 0)
+         END AMOUNT
+    FROM xxums.xxum_gsa_gha_staff xggs,
+         xxum_request_details_tb xrdt,
+         xxum_request_sub_details_tb xrsdt,
+         xxum_request_header_tb xrht,
+         mtl_system_items_b msib
+   WHERE 1 = 1
+         AND xggs.person_id = xrht.person_id
+         AND xrht.req_header_id = xrdt.req_header_id
+         AND xrdt.req_details_id = xrsdt.req_details_id
+         AND xrsdt.req_sub_details_id = xrsdt.req_sub_details_id
+         AND xrsdt.attribute2 = 'INTERFACED'
+         AND xrht.req_type  IN ('YE','SP')
+         AND xrht.status IN ('IF', 'IP')
+         AND xrdt.item_description = msib.description
+         AND xrdt.item_code = msib.segment1
+         AND msib.organization_id = 86)
+ WHERE 1 = 1
+  /*AND action_date  BETWEEN NVL(TO_DATE('01-01-2025','DD-MM-YYYY'), TO_DATE('01-JAN-1951','DD-MON-RRRR')) --Fixed ORA-01843: TO_DATE('01-01-2026','DD-MM-YYYY') is already DATE, no re-conversion needed
+  AND NVL(TO_DATE('29-11-2025','DD-MM-YYYY'), TO_DATE('31-DEC-4712','DD-MON-RRRR'))*/
+  
+   AND action_date >= NVL(TO_DATE(:from_date_cp,'DD-MON-RRRR'),
+                         DATE '1951-01-01')
+  AND action_date < NVL(TO_DATE(:to_date_cp,'DD-MON-RRRR') + 1,
+                        DATE '4712-12-31')
+  
+  /*AND action_date >= TO_DATE('01-01-2026','DD-MM-YYYY')
+AND action_date <  TO_DATE('01-07-2026','DD-MM-YYYY')*/
+  AND EXISTS
+              (SELECT 1
+                 FROM fnd_user fu
+                 JOIN fnd_lookup_values flv2
+                 ON flv2.lookup_type = 'XXUMS_ADMIN'
+                      AND flv2.language    = 'US'
+                      AND UPPER(flv2.meaning) = UPPER(fu.user_name)
+                 WHERE fu.user_id = 10166
+                      AND fu.end_date IS NULL))
+ ORDER BY ACTION_DATE DESC;
