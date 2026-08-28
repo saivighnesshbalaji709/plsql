@@ -1,0 +1,56 @@
+/*------------------------------------------------------------------------------------------
+SR   : 447172
+Issue Name      : Employee New Joiners View
+Description     : Creation of XXOA_HR_NEW_JOINERS_DETAILS view 
+
+---------------------------------------------------------------------------------------------------------------
+Date            Author                Version    			Remarks
+27-Aug-2026     Sai Vighnessh B L      	1.0      		 Initial Development
+---------------------------------------------------------------------------------------------------------------*/-- 
+SPOOL XXOA_HR_NEW_JOINERS_DETAILS_447172.txt;
+SET SERVEROUTPUT ON;
+SET DEFINE OFF
+
+CREATE OR REPLACE  VIEW APPS.XXOA_HR_NEW_JOINERS_DETAILS AS
+   
+SELECT 
+      papf.employee_number ,
+      papf.full_name FULL_NAME,
+      TO_CHAR(ppos.date_start,'DD-MON-YYYY') DATE_OF_JOINING,
+      DECODE(papf.current_employee_flag,'Y','Yes','No') CURRENTEMPLOYEE,
+      hr_general.decode_lookup('NATIONALITY',papf.nationality) Nationality,
+      xxoa_hr.get_parent_org (paaf.business_group_id,
+                                       paaf.organization_id,
+                                       'SBU',
+                                       'NAME'
+                                      ) SBU,
+      xxoa_hr.get_parent_org (paaf.business_group_id,
+                                       paaf.organization_id,
+                                       'DEPT',
+                                       'NAME'
+                                      ) DEPARTMENT,
+      xxoa_hr.get_parent_org (paaf.business_group_id,
+                                       paaf.organization_id,
+                                       'SE',
+                                       'NAME'
+                                      ) SECTION,
+      hr_general.decode_person_name(paaf.supervisor_id)   SUPERVISOR,
+      hr_general.decode_person_name(paaf.ass_attribute8)  LINEMANAGER                                  
+FROM per_all_people_f papf,
+     per_all_assignments_f paaf,
+     pay_all_payrolls_f pay,
+     per_periods_of_service ppos
+WHERE 1=1
+AND  papf.person_id=paaf.person_id
+AND  paaf.period_of_service_id = ppos.period_of_service_id
+AND  ppos.date_start BETWEEN papf.effective_start_date AND papf.effective_end_date
+AND  ppos.date_start BETWEEN paaf.effective_start_date AND paaf.effective_end_date
+AND  paaf.payroll_id=pay.payroll_id
+AND  pay.payroll_name IN ('Base Payroll','Salalah Payroll','Cargo Payroll','GH Payroll')
+AND  ppos.date_start BETWEEN pay.effective_start_date AND pay.effective_end_date
+AND  ppos.date_start BETWEEN :P_START_DATE AND :P_END_DATE;
+
+
+CREATE OR REPLACE SYNONYM XXHRVIEW.XXOA_HR_NEW_JOINERS_DETAILS FOR APPS.XXOA_HR_NEW_JOINERS_DETAILS;
+
+GRANT SELECT ON APPS.XXOA_HR_NEW_JOINERS_DETAILS TO XXHRVIEW;
