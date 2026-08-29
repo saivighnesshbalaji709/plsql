@@ -1,0 +1,129 @@
+ SELECT   ppf.employee_number, initcap(ppf.full_name) employee_name, --- Added initcap for the SR#408285
+               pg.NAME grade, SUBSTR(pps.NAME, 0, INSTR(pps.NAME, '.')-1) POSITION,  --- Added for the SR#408285
+			   --pps.NAME POSITION,  -- commented for the SR#408285
+			   pj.NAME job,
+               ppf.national_identifier NATIONAL_ID, --Added for the SR#432889
+               xxoa_hr_emp_age_fns (p_effective_end_date, date_of_birth) age,
+               hr_general.decode_lookup ('MAR_STATUS',
+                                   ppf.marital_status
+                                  ) marrg_status, --Added for the SR#432889
+		      pppf.payroll_name PAYROLL_NAME, --Added for the SR#432889
+              ppf.attribute30 arabic_name, --Added for the SR#432889
+		  trunc(ROUND(months_between(sysdate,ppos.date_start))/12) ||' Years '||mod( ROUND(months_between(sysdate,ppos.date_start)),12)||' Months' YEARS_OF_SERVICES, ------Added for the SR#432889
+		  hr_general.decode_lookup ('SEX', ppf.sex) Gender --Added for the SR#432889
+          ,TO_CHAR(ppf.date_of_birth ,'DD-MON-YYYY') date_of_birth,   --Added for the SR#432889
+               hr11.meaning nationality, hrl.meaning d_leaving_reason,
+               TO_CHAR
+                   (ppos.notified_termination_date,
+                    'DD-MON-YYYY'
+                   ) notified_termination_date,
+               TO_CHAR (ppos.actual_termination_date,
+                        'DD-MON-YYYY'
+                       ) actual_termination_date,
+               DECODE (ppos.pds_information1,
+                       'N', 'No',
+                       'Y', 'Yes',
+                       NULL
+                      ) re_hire_recomond,
+               ppos.pds_information3 wave_off_days,
+               paf.organization_id org_id, hou.NAME ORGANIZATION,
+               hou.TYPE org_type, ppf.person_id,
+               NVL
+                  (xxoa_hr.get_parent_org
+                                  (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                                   paf.organization_id,
+                                   'SBU',
+                                   'NAME'
+                                  ),
+                   xxoa_hr.get_parent_org
+                                  (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                                   paf.organization_id,
+                                   'SU',
+                                   'NAME'
+                                  )
+                  ) sbu,
+               xxoa_hr.get_parent_org
+                      (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                       paf.organization_id,
+                       'DEPT',
+                       'NAME'
+                      ) department,
+               xxoa_hr.get_parent_org
+                         (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                          paf.organization_id,
+                          'SE',
+                          'NAME'
+                         ) section,
+				xxoa_hr.get_parent_org
+                         (fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID'),
+                          paf.organization_id,
+                          'SUBSEC',
+                          'NAME'
+                         ) Subsection, --- Added for the SR#408285
+               TO_CHAR (p_effective_start_date, 'DD-MON-YYYY') ps_date,
+               TO_CHAR (p_effective_end_date, 'DD-MON-YYYY') pe_date,
+			   ---added for SR 397534----
+			     hr_general.decode_lookup ('XXOA_LEAVING_REASON',
+                                         pds_information6
+                                        ) reason,   ---end for SR 397534----
+               ppos.date_start joining_date
+          FROM per_people_f ppf,
+               per_assignments_f paf,
+               pay_payrolls_f pppf,
+               per_grades pg,
+               per_all_positions pps,
+               per_jobs pj,
+               per_periods_of_service_v ppos,
+               hr_organization_units hou,
+               hr_lookups hrl,
+               hr_lookups hr11
+         WHERE 1 = 1
+           AND ppf.person_id = paf.person_id
+           and paf.payroll_id = pppf.payroll_id
+           AND paf.grade_id = pg.grade_id(+)
+           AND paf.position_id = pps.position_id(+)
+           AND paf.job_id = pj.job_id(+)
+           AND ppf.person_id = ppos.person_id(+)
+           AND paf.primary_flag = 'Y'
+           AND paf.organization_id = hou.organization_id
+           AND ppos.leaving_reason = hrl.lookup_code(+)
+           AND ppf.nationality = hr11.lookup_code(+)
+           AND hrl.lookup_type(+) =
+                    'LEAV_REAS'
+                               /*Lookup type is used to get the Leave reason*/
+           AND hr11.lookup_type(+) =
+                   'NATIONALITY'
+                                /*Lookup type is used to get the nationality*/
+                                AND ppos.actual_termination_date BETWEEN pppf.effective_start_date
+                                                AND pppf.effective_end_date
+           AND ppos.actual_termination_date BETWEEN ppf.effective_start_date
+                                                AND ppf.effective_end_date
+           AND ppos.actual_termination_date BETWEEN paf.effective_start_date
+                                                AND paf.effective_end_date
+           AND hrl.lookup_code = NVL (p_termination_type, hrl.lookup_code)
+                /*OR (    ppos.notified_termination_date IS NOT NULL
+                    AND ppos.notified_termination_date
+                           BETWEEN p_effective_start_date
+                               AND p_effective_end_date
+                   )
+               )*/
+           AND ppf.person_id = ppf.person_id
+           AND paf.job_id = paf.job_id
+           AND (   EXISTS (
+                      SELECT     organization_id_child
+                            FROM per_org_structure_elements str
+                           WHERE organization_id_child = paf.organization_id
+                      CONNECT BY str.organization_id_parent =
+                                                PRIOR str.organization_id_child
+                             AND str.org_structure_version_id =
+                                         (SELECT organization_structure_id
+                                            FROM per_organization_structures
+                                           WHERE primary_structure_flag = 'Y')
+                             AND str.business_group_id =
+                                    fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID')
+                      START WITH str.organization_id_child = paf.organization_id
+                                        ))
+                OR 
+                        fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID')
+               )
+      ORDER BY sbu, department, section, LPAD (ppf.employee_number, 10);
