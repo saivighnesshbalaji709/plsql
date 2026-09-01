@@ -1,0 +1,40 @@
+/******************Sick Leave Bank ************************************************/
+         IF UPPER (v_absence_type) = UPPER ('Sick Leave Bank')
+         THEN 
+             IF v_no_of_days > v_sick_leave_bank_days
+             THEN
+                 p_duration := 'FAILED';
+                 p_invalid_msg :='Cannot avail more than:  '|| TO_CHAR (v_sick_leave_bank_days)|| 'days of Leave';
+                 RETURN 1;
+			--Added for SR#447210: START
+			 ELSE
+                  IF v_no_of_days > 5
+                  THEN
+                     p_duration := 'FAILED';
+                     p_invalid_msg :=
+                               'Cannot avail more than 5 days of Sick Leave';
+                     RETURN 1;
+			
+            ELSE
+                 p_duration := TO_CHAR (v_no_of_days);
+                 RETURN 0;
+		
+			ELSE 
+			     IF v_sick_leaves_taken < v_sick_leave_max_days ---- ---Added for SR 362472
+                 THEN
+				   p_duration := 'FAILED';
+				   p_invalid_msg :=
+					  'This leave can be applied only after availing of your SL Balance for this year.';
+				   RETURN 1;
+            ELSE
+			    IF v_los < 12
+                THEN
+                   p_duration := 'FAILED';
+                   p_invalid_msg :=
+                      -----'You havenot completed one year of service with Oman Air. Hence can not avail this leave';
+					  'You have not completed one year of service. Hence cannot avail this leave.';
+                   RETURN 1;
+            END IF;
+            END IF;
+			--Added for SR#447210: END
+        END IF;
