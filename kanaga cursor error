@@ -74,4 +74,307 @@ ORA-06550: line 25, column 25:
 PLS-00201: identifier 'CUREMPDET' must be declared
 ORA-06550: line 25, column 4:
 PL/SQL: Statement ignored
+
+
+
+
+
+
+--------------------------------------------------------
+--  File created - Thursday-September-10-2026   
+--------------------------------------------------------
+--------------------------------------------------------
+--  DDL for Procedure XXOA_ESS_EMPCRT_PRC
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE EDITIONABLE PROCEDURE "APPS"."XXOA_ESS_EMPCRT_PRC" (
+   errbuf              out      VARCHAR2,
+   retcode             out      VARCHAR2,
+   p_employee_number   IN       VARCHAR2,
+   p_signature         IN       VARCHAR2
+)
+-- =========================================================================
+--      Copyright (c) 2011 Oman Air Project
+--                    All rights reserved.
+-- =========================================================================
+--  NAME
+-- XXOA_ESS_SALARYCERT_PRC.prc
+--
+--  Design Reference
+--  No Previous reference
+--
+-- PROGRAM TYPE
+--  Procedure
+--
+-- PURPOSE
+--
+--  This Procedure should fetch the Employees salary Details
+--
+-- NOTES
+-- This Procedure will generate the XML Tags for this Report "OA Custom ESS Employment Certificate Report"
+--
+-- HISTORY
+-- =========================================================================
+--  Version   ChangeID     Date                Author                     Activity
+-- =================================================================================================================================
+--   1.1                18-Jul-2021         Rishan (Hexaware)         SR 319221Letter printing access through ESS
+--   1.2                01-Nov-2022         Rishan (Hexaware)         SR 329969 Circular -Employment Certificate through Employee
+--																				self-service for Catering
+--   1.3                20-Jan-2026         Vijayadurg Nayudu(Hexaware)  SR 430509
+--   1.4                10-Sep-2026         Kanaga Raja Lakshmi(Hexaware) SR 447479        
+-- =================================================================================================================================
+AS
+   CURSOR curempdet (p_employee_number VARCHAR2)
+   IS
+   SELECT   /*+ parallel (papf 100)*/
+               papf.employee_number emp_no,
+			   ---Changes Starts for the SR#430509---
+				(select count(request_id)from fnd_concurrent_requests
+				where 1=1
+				and REQUESTED_START_DATE >= TRUNC(SYSDATE, 'YEAR')
+				and CONCURRENT_PROGRAM_ID =(select CONCURRENT_PROGRAM_ID from fnd_concurrent_requests where request_id=Fnd_Global.CONC_REQUEST_ID)) TOT_REQ_CNT,
+				(select count(request_id)from fnd_concurrent_requests
+					where 1=1
+					and REQUESTED_START_DATE >= TRUNC(SYSDATE, 'YEAR')
+					and REQUESTED_BY = fnd_global.user_id
+					and CONCURRENT_PROGRAM_ID =(select CONCURRENT_PROGRAM_ID from fnd_concurrent_requests where request_id=Fnd_Global.CONC_REQUEST_ID )
+				)user_req_cnt,
+		     ---Changes ends for the SR#430509---
+			   papf.title title,
+			   hl3.meaning payrl_email,hl3.DESCRIPTION payrl_phone,hl3.Tag Footer_mail, --added for SR 329969
+               hl2.meaning sex, papf.full_name NAME,
+               to_char (SYSDATE, 'DD-MON-RRRR') date1,
+               papf.office_number phone,
+               to_char (papf.start_date, 'DD-MON-RRRR') doj,pppf.payroll_name payroll,
+               papf.original_date_of_hire, pp.NAME position, papf.person_id,
+               paaf.organization_id org_id
+          FROM per_people_f papf,
+               per_assignments_f paaf,
+               pay_payrolls_f pppf,
+               per_positions pp,
+               hr_organization_units hou,
+               hr_lookups hl2,
+               fnd_lookup_values_vl hl3 --added for SR 329969
+         WHERE papf.person_id = paaf.person_id
+           AND paaf.payroll_id = pppf.payroll_id
+           AND paaf.primary_flag = 'Y'
+           AND pp.position_id(+) = paaf.position_id
+           AND paaf.organization_id = hou.organization_id
+           AND trunc (SYSDATE) BETWEEN pppf.effective_start_date
+                                   AND pppf.effective_end_date
+           AND trunc (SYSDATE) BETWEEN paaf.effective_start_date
+                                   AND paaf.effective_end_date
+           AND trunc (SYSDATE) BETWEEN papf.effective_start_date
+                                   AND papf.effective_end_date
+           AND papf.person_id = nvl (p_employee_number, papf.person_id)
+           AND hl2.lookup_type(+) = 'SEX'
+           AND hl2.lookup_code(+) = papf.sex
+           AND hl3.lookup_type(+) ='XXOA_ESS_CERTIFICATE_DETAILS' --added for SR 329969
+           AND hl3.lookup_code(+) = upper(pppf.payroll_name) --added for SR 329969
+           AND trunc(sysdate) between nvl(hl3.START_DATE_ACTIVE,to_date('01-Jan-1951')) and nvl(hl3.END_DATE_ACTIVE,to_date('31-Dec-4721')) --added for SR 329969
+      ORDER BY lpad (papf.employee_number, 10);
+   /*To fetch reviewed by details*/
+   CURSOR cursignature (p_signature VARCHAR2)
+   IS
+     /*SELECT full_name NAME, --POSITION
+             pos.NAME orgname, SYSDATE------>> Changed for SR-190370
+        FROM per_all_people_f papf, per_all_assignments_f paaf ,per_all_positions pos
+       WHERE papf.employee_number  = p_signature----'60339'
+         AND paaf.person_id= papf.person_id
+         AND paaf.position_id=pos.position_id
+         AND trunc(SYSDATE) BETWEEN papf.effective_start_date AND papf.effective_end_date
+         AND trunc(SYSDATE) BETWEEN paaf.effective_start_date AND paaf.effective_end_date
+         AND paaf.primary_flag='Y'
+         AND paaf.assignment_type ='E';*/
+		 select --first_name || ' ' || suffix || ' ' || middle_names || ' ' ||  last_name NAME, ----commented for #447479
+       first_name || ' ' ||  last_name  NAME,    ----added for #447479
+		 HR.MEANING orgname ,SYSDATE
+from per_all_people_f papf,per_all_assignments_f paaf ,HR_LOOKUPS HR,per_all_positions pos,per_position_definitions pod
+where 1=1
+and papf.employee_number  = p_signature----'60339'
+AND paaf.person_id= papf.person_id
+and ASSIGNMENT_TYPE='E'
+and PRIMARY_FLAG='Y'
+and trunc(sysdate) between trunc(paaf.effective_start_date ) and trunc(paaf.effective_end_date)
+and trunc(SYSDATE) BETWEEN trunc(papf.effective_start_date) AND trunc(papf.effective_end_date)
+and trunc(sysdate) between trunc(pos.DATE_EFFECTIVE ) and trunc(nvl(pos.DATE_END,to_date ('31-Dec-4712')))
+and paaf.position_id = pos.position_id
+and pod.position_definition_id= pos.position_definition_id
+and hr.lookup_type='XXOA_HQ_POSITION_DESC'
+and hr.enabled_flag='Y'
+and hr.lookup_code=pod.segment3;
+--Catering LE Changes Starts
+   cursor cur_hr_contact
+   is
+    select pap.person_id
+          ,pap.employee_number
+          ,pap.full_name
+          ,ppf.payroll_name
+          ,nvl(flv1.description,flv3.description) hr_email
+          ,nvl(flv2.description,flv4.description) hr_phone
+      from per_all_people_f      pap
+          ,per_all_assignments_f paa
+          ,pay_payrolls_f        ppf
+          ,fnd_lookup_values     flv1
+          ,fnd_lookup_values     flv2
+          ,fnd_lookup_values     flv3
+          ,fnd_lookup_values     flv4
+    where pap.person_id             =   paa.person_id
+      and paa.payroll_id            =   ppf.payroll_id
+      and ppf.payroll_name          =   regexp_replace(flv1.meaning(+),'( Email)')
+      and ppf.payroll_name          =   regexp_replace(flv2.meaning(+),'( Phone)')
+      and pap.current_employee_flag = 'Y'
+      and paa.assignment_type       = 'E'
+      and paa.primary_flag          = 'Y'
+      and flv1.lookup_type(+)       = 'XXOA_HR_CONTACT_CERT_PAYROLL'
+      and flv1.language(+)          = userenv('lang')
+      and flv1.enabled_flag(+)      = 'Y'
+      and regexp_like(flv1.meaning(+),' Email')
+      and flv2.lookup_type(+)       = 'XXOA_HR_CONTACT_CERT_PAYROLL'
+      and flv2.language(+)          = userenv('lang')
+      and flv2.enabled_flag(+)      = 'Y'
+      and regexp_like(flv2.meaning(+),' Phone')
+      and flv3.lookup_type(+)       = 'XXOA_HR_CONTACT_CERT_PAYROLL'
+      and flv3.language(+)          = userenv('lang')
+      and flv3.enabled_flag(+)      = 'Y'
+      and regexp_like(flv3.meaning(+),'Default Email')
+      and flv4.lookup_type(+)       = 'XXOA_HR_CONTACT_CERT_PAYROLL'
+      and flv4.language(+)          = userenv('lang')
+      and flv4.enabled_flag(+)      = 'Y'
+      and regexp_like(flv4.meaning(+),'Default Phone')
+      and trunc(sysdate) between pap.effective_start_date and pap.effective_end_date
+      and trunc(sysdate) between paa.effective_start_date and paa.effective_end_date
+      and trunc(sysdate) between trunc(flv1.start_date_active(+)) and trunc(nvl(flv1.end_date_active(+),sysdate+1))
+      and trunc(sysdate) between trunc(flv2.start_date_active(+)) and trunc(nvl(flv2.end_date_active(+),sysdate+1))
+      and trunc(sysdate) between trunc(flv3.start_date_active(+)) and trunc(nvl(flv3.end_date_active(+),sysdate+1))
+      and trunc(sysdate) between trunc(flv4.start_date_active(+)) and trunc(nvl(flv4.end_date_active(+),sysdate+1))
+      and pap.person_id = nvl(p_employee_number,pap.person_id);
+--Catering LE Changes Ends
+   vreviewer   per_all_people_f.full_name%TYPE;
+   vorgname    hr_all_organization_units.NAME%TYPE;
+   vsex        VARCHAR2 (20);
+   rec_hr_contact cur_hr_contact%rowtype;  --Added for Catering LE Changes
+BEGIN
+   IF p_signature IS NOT NULL
+   THEN
+      FOR cursignature_r IN cursignature (p_signature)
+      loop
+         vreviewer := cursignature_r.NAME;
+         vorgname := cursignature_r.orgname;
+      END loop;
+   ELSE
+      vreviewer := NULL;
+   END IF;
+   fnd_file.put_line (fnd_file.output, '<?xml version="1.0"?>');
+   fnd_file.put_line (fnd_file.output, '<XXOAESSEMPCERT>');
+--Catering LE Changes Starts
+   OPEN  cur_hr_contact;
+   FETCH cur_hr_contact INTO rec_hr_contact;
+   CLOSE cur_hr_contact;
+   /*Start of HR Contact XML Tags*/
+   fnd_file.put_line (fnd_file.output, '<G_HR_CONTACT>');
+   fnd_file.put_line (fnd_file.output,'<HR_EMAIL><![CDATA[' || rec_hr_contact.hr_email|| ']]></HR_EMAIL>');
+   fnd_file.put_line (fnd_file.output,'<HR_PHONE><![CDATA[' || rec_hr_contact.hr_phone|| ']]></HR_PHONE>');
+   fnd_file.put_line (fnd_file.output, '</G_HR_CONTACT>');
+   /*End of HR Contact XML Tags*/
+--Catering LE Changes Ends
+   FOR curempdet_rec IN curempdet (p_employee_number)
+   loop
+      vsex := NULL;
+      IF curempdet_rec.sex = 'Male'
+      THEN
+         vsex := 'he';
+      ELSE
+         vsex := 'she';
+      END IF;
+      fnd_file.put_line (fnd_file.output, '<G_EMP>');
+      fnd_file.put_line (fnd_file.output,
+                            '<EMP_NAME><![CDATA['
+                         || curempdet_rec.NAME
+                         || ']]></EMP_NAME>'
+                        );
+      fnd_file.put_line (fnd_file.output,
+                            '<EMP_NAME><![CDATA['
+                         || curempdet_rec.title
+                         || ']]></EMP_NAME>'
+                        );
+		---Added for SR 329969
+		fnd_file.put_line (fnd_file.output,
+                            '<PAYRL_EMAIL><![CDATA['
+                         || curempdet_rec.PAYRL_EMAIL
+                         || ']]></PAYRL_EMAIL>'
+                        );
+		fnd_file.put_line (fnd_file.output,
+                            '<FOOTER_MAIL><![CDATA['
+                         || curempdet_rec.FOOTER_MAIL
+                         || ']]></FOOTER_MAIL>'
+                        );
+		fnd_file.put_line (fnd_file.output,
+                            '<PAYRL_PHONE><![CDATA['
+                         || curempdet_rec.PAYRL_PHONE
+                         || ']]></PAYRL_PHONE>'
+                        );
+		---End for SR 329969
+      fnd_file.put_line (fnd_file.output,
+                         '<DATE>' || curempdet_rec.date1 || '</DATE>'
+                        );
+      fnd_file.put_line (fnd_file.output, '<SEX>' || vsex || '</SEX>');
+      fnd_file.put_line (fnd_file.output,
+                            '<EMP_NUMBER>'
+                         || curempdet_rec.emp_no
+                         || '</EMP_NUMBER>'
+                        );
+	  --- Changes starts for the SR#430509---
+	  fnd_file.put_line (fnd_file.output,
+                            '<TOT_REQ_CNT>'
+                         || curempdet_rec.TOT_REQ_CNT
+                         || '</TOT_REQ_CNT>'
+                        );
+	   fnd_file.put_line (fnd_file.output,
+                            '<USER_REQ_CNT>'
+                         || curempdet_rec.user_req_cnt
+                         || '</USER_REQ_CNT>'
+                        );
+		--- Changes ends for the SR#430509---
+      fnd_file.put_line (fnd_file.output,
+                         '<PHONE>' || curempdet_rec.phone || '</PHONE>'
+                        );
+      fnd_file.put_line (fnd_file.output,
+                         '<DOJ>' || curempdet_rec.doj || '</DOJ>'
+                        );
+    fnd_file.put_line (fnd_file.output,
+                         '<PAYROLL>' || curempdet_rec.PAYROLL || '</PAYROLL>'
+                        );
+      fnd_file.put_line (fnd_file.output,
+                            '<POSITION><![CDATA['
+                         || curempdet_rec.position
+                         || ']]></POSITION>'
+                        );
+      fnd_file.put_line (fnd_file.output,
+                            '<SIGEMP_NAME><![CDATA['
+                         || vreviewer
+                         || ']]></SIGEMP_NAME>'
+                        );
+      fnd_file.put_line (fnd_file.output,
+--                         '<SIGEMP_ORG>' || vorgname || '</SIGEMP_ORG>'                --Commented for SR-213258
+                        '<SIGEMP_ORG><![CDATA[' || vorgname || ']]></SIGEMP_ORG>'       --Added for SR-213258
+                        );
+      fnd_file.put_line (fnd_file.output, '</G_EMP>');
+   END loop;
+   fnd_file.put_line (fnd_file.output, '</XXOAESSEMPCERT>');
+/*Exception for the Main*/
+exception
+   WHEN no_data_found
+   THEN
+      fnd_file.put_line (fnd_file.LOG, 'No Data Found : ' || sqlerrm);
+   WHEN too_many_rows
+   THEN
+      fnd_file.put_line (fnd_file.LOG, 'Too Many Rows occured : ' || sqlerrm);
+   WHEN others
+   THEN
+      fnd_file.put_line (fnd_file.LOG, 'Error in Main Block : ' || sqlerrm);
+END;
+/
+
  
