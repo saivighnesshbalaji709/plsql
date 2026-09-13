@@ -1,0 +1,77 @@
+@XXOA_ESS_EMPCRT_PRC.prc
+ 
+Warning: Procedure created with compilation errors.
+ 
+ 
+Warning: Procedure created with compilation errors.
+ 
+SP2-0734: unknown command beginning "CURSOR cur..." - rest of line ignored.
+SP2-0042: unknown command "IS" - rest of line ignored.
+ 
+Warning: Procedure created with compilation errors.
+ 
+SP2-0734: unknown command beginning "pos.NAME o..." - rest of line ignored.
+SP2-0734: unknown command beginning "FROM per_a..." - rest of line ignored.
+SP2-0734: unknown command beginning "WHERE papf..." - rest of line ignored.
+SP2-0734: unknown command beginning "AND paaf.p..." - rest of line ignored.
+SP2-0044: For a list of known commands enter HELP
+and to leave enter EXIT.
+SP2-0734: unknown command beginning "AND paaf.p..." - rest of line ignored.
+SP2-0734: unknown command beginning "AND trunc(..." - rest of line ignored.
+SP2-0734: unknown command beginning "AND trunc(..." - rest of line ignored.
+SP2-0734: unknown command beginning "AND paaf.p..." - rest of line ignored.
+SP2-0044: For a list of known commands enter HELP
+and to leave enter EXIT.
+SP2-0734: unknown command beginning "AND paaf.a..." - rest of line ignored.
+and papf.employee_number  = p_signature----'60339'
+                            *
+ERROR at line 6:
+ORA-00904: "P_SIGNATURE": invalid identifier
+ 
+ 
+SP2-0734: unknown command beginning "cursor cur..." - rest of line ignored.
+SP2-0042: unknown command "is" - rest of line ignored.
+      and pap.person_id = nvl(p_employee_number,pap.person_id)
+                              *
+ERROR at line 43:
+ORA-00904: "P_EMPLOYEE_NUMBER": invalid identifier
+ 
+ 
+SP2-0734: unknown command beginning "vreviewer ..." - rest of line ignored.
+SP2-0734: unknown command beginning "vorgname  ..." - rest of line ignored.
+SP2-0734: unknown command beginning "vsex      ..." - rest of line ignored.
+SP2-0734: unknown command beginning "rec_hr_con..." - rest of line ignored.
+SP2-0044: For a list of known commands enter HELP
+and to leave enter EXIT.
+   IF p_signature IS NOT NULL
+      *
+ERROR at line 2:
+ORA-06550: line 2, column 7:
+PLS-00201: identifier 'P_SIGNATURE' must be declared
+ORA-06550: line 2, column 4:
+PL/SQL: Statement ignored
+ORA-06550: line 15, column 10:
+PLS-00201: identifier 'CUR_HR_CONTACT' must be declared
+ORA-06550: line 15, column 4:
+PL/SQL: SQL Statement ignored
+ORA-06550: line 16, column 10:
+PLS-00201: identifier 'CUR_HR_CONTACT' must be declared
+ORA-06550: line 16, column 4:
+PL/SQL: SQL Statement ignored
+ORA-06550: line 17, column 10:
+PLS-00201: identifier 'CUR_HR_CONTACT' must be declared
+ORA-06550: line 17, column 4:
+PL/SQL: SQL Statement ignored
+ORA-06550: line 20, column 64:
+PLS-00201: identifier 'REC_HR_CONTACT.HR_EMAIL' must be declared
+ORA-06550: line 20, column 4:
+PL/SQL: Statement ignored
+ORA-06550: line 21, column 64:
+PLS-00201: identifier 'REC_HR_CONTACT.HR_PHONE' must be declared
+ORA-06550: line 21, column 4:
+PL/SQL: Statement ignored
+ORA-06550: line 25, column 25:
+PLS-00201: identifier 'CUREMPDET' must be declared
+ORA-06550: line 25, column 4:
+PL/SQL: Statement ignored
+ 
