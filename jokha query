@@ -1,0 +1,77 @@
+SELECT distinct --aai.rowid row_id,
+  --aai.id,
+  --aai.effective_start_date,
+  --aai.effective_end_date,
+  initcap(peo.full_name),
+  --aai.assignment_id,
+  asg.assignment_number,
+  asg.business_group_id asg_bus_grp_id,
+-- aai.autogen_hours_yn,
+  --hrlk.meaning autogen_hours_yn_meaning,
+-- aai.rotation_plan,
+-- rot.name rotation_plan_name,
+  aai.earning_policy,
+-- erp.name earning_policy_name,
+-- aai.shift_differential_policy,
+  --sdp.name shift_differential_policy_name,
+  --aai.hour_deduction_policy,
+-- hdp.name hour_deduction_policy_name,
+--  aai.created_by,
+--  aai.creation_date,
+--  aai.last_update_date,
+--  aai.last_update_login,
+--  aai.last_updated_by,
+--  aai.attribute_category,
+  aai.attribute1,
+  aai.attribute2,
+  aai.attribute3,
+  aai.attribute4,
+  aai.attribute5,
+  aai.attribute6,
+  aai.attribute7,
+  aai.attribute8,
+  aai.attribute9,
+  aai.attribute10,
+  aai.attribute11,
+  aai.attribute12,
+  aai.attribute13,
+  aai.attribute14,
+  aai.attribute15,
+  aai.attribute16,
+  aai.attribute17,
+  aai.attribute18,
+  aai.attribute19,
+  aai.attribute20,
+  aai.attribute21,
+  aai.attribute22,
+  aai.attribute23,
+  aai.attribute24,
+  aai.attribute25,
+  aai.attribute26,
+  aai.attribute27,
+  aai.attribute28,
+  aai.attribute29,
+  aai.attribute30
+FROM hxt_hour_deduct_policies hdp,
+  hxt_shift_diff_policies sdp,
+  hxt_earning_policies erp,
+  hxt_rotation_plans rot,
+  per_people_f peo,
+  per_assignments_f asg,
+  hr_lookups hrlk,
+  hxt_add_assign_info_f aai,
+  fnd_sessions fss
+WHERE 1                 = 1
+--AND peo.employee_number = '60532'--'60532'
+AND fss.effective_date BETWEEN aai.effective_start_date AND aai.effective_end_date
+AND aai.assignment_id = asg.assignment_id
+AND fss.effective_date BETWEEN asg.effective_start_date AND asg.effective_end_date
+AND asg.person_id = peo.person_id
+AND fss.effective_date BETWEEN peo.effective_start_date AND peo.effective_end_date
+AND aai.autogen_hours_yn          = hrlk.lookup_code
+AND hrlk.application_id           = 800
+AND hrlk.lookup_type              = 'YES_NO'
+AND aai.rotation_plan             = rot.id (+)
+AND aai.earning_policy            = erp.id
+AND aai.shift_differential_policy = sdp.id (+)
+AND aai.hour_deduction_policy     = hdp.id (+);
