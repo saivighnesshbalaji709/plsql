@@ -1,0 +1,656 @@
+create or replace PROCEDURE XXOA_OTL_ATTENDANCE_MASS_UPD (
+            p_errbuf    OUT   VARCHAR2,
+            p_retcode   OUT   NUMBER,
+			p_SBU       IN    VARCHAR2,
+			p_Department IN   VARCHAR2,
+			p_Section    IN   VARCHAR2,
+			p_Subsection IN   VARCHAR2,
+			p_Employee   IN   Number,
+            p_payroll    IN   Number,
+            p_Rotation   IN   VARCHAR2,
+			p_Attendance  IN  VARCHAR2,
+			p_Punch_In	  IN  Varchar2,
+			P_punch_out   In  varchar2
+
+   ) AS
+-- =======================================================================================================
+--      Copyright (c) 2011 Oman Air Project
+--                    All rights reserved.
+-- =======================================================================================================
+--  NAME
+--    XXOA_OTL_ATTENDANCE_MASS_UPDT_PRC.prc
+--
+-- Design Reference
+--
+--
+-- PROGRAM TYPE
+--  Procedure
+--
+-- PURPOSE
+--  Create a procedure for Mass updating Timecard timings
+--
+-- NOTES
+--
+--
+-- HISTORY
+-- =======================================================================================================================================================================
+--  Version    Date                   Author                         Activity
+-- =======================================================================================================================================================================
+--  1.0        01-Dec-2025          Vijayadurga Nayudu               Initial Version - SR#427554
+
+-- =======================================================================================================================================================================
+
+
+
+   l_object_version_number             NUMBER := NULL;
+   l_process VARCHAR2(10) :='N';
+   l_analysis_criteria_id number := NULL;
+
+
+   	v_proceed_flag 	 VARCHAR2 (1);
+	v_success			 VARCHAR2 (1);
+	v_message			 VARCHAR2 (2000);
+	v_business_group	 NUMBER := fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID');
+	v_user_id			 NUMBER := fnd_profile.VALUE ('USER_ID');
+	v_login_id			 NUMBER := fnd_profile.VALUE ('LOGIN_ID');
+	l_global_max_OT      number;
+
+	l_global_max_OFF_OT number;
+	Off_working_hrs number;
+
+    v_shift_name VARCHAR2 (80);
+    v_shift_in VARCHAR2 (20);
+    v_shift_out VARCHAR2 (20);
+
+
+   v_test VARCHAR2 (20);
+   P_sts_flag  VARCHAR2 (1) := NULL;
+   v_time_building_block_id   NUMBER;
+
+   v_attendance_date DATE := NULL;
+   v_old_time_in Varchar2(10);
+   v_old_time_out Varchar2(10);
+   v_old_total_hours NUMBER;
+
+all female employee where out punch was not available on 18-oct-2026
+
+we have to update their out punch. OUT PUNCH SHOULD BE 1500 FOR THOSE WHO BELONG TO ADMIN 0700-1500
+
+   CURSOR C_EMP_OTL_ATN_DATA ( v_attendance_date DATE)
+          is
+          		 SELECT  papf.employee_number employee_number,
+                papf.full_name employee_name,
+              paaf.assignment_id ,
+                papf.person_id employee_id
+         FROM per_all_people_f papf,
+                per_all_assignments_f paaf,
+                HXT_ADD_ASSIGN_INFO_F HAA,
+                hxt_rotation_plans hrp ,hxt_earning_policies hep
+          WHERE 1=1
+            AND   paaf.primary_flag             = 'Y'
+            AND paaf.person_id             = papf.person_id
+            AND paaf.ASSIGNMENT_TYPE ='E'
+            AND paaf.PRIMARY_FLAG ='Y'
+            and papf.CURRENT_EMPLOYEE_FLAG='Y'
+			AND papf.person_id = nvl(p_Employee,papf.person_id)
+           -- AND ppg.people_group_id(+) = paaf.people_group_id
+           and haa.assignment_id=paaf.assignment_id
+            and hep.id=haa.Earning_Policy
+            and paaf.payroll_id =nvl(p_payroll,paaf.payroll_id)
+            and hrp.id=haa.ROTATION_PLAN
+           and hrp.id= nvl(p_Rotation,hrp.id)
+           AND v_attendance_date  BETWEEN paaf.effective_start_date     AND paaf.effective_end_date
+           AND v_attendance_date  BETWEEN papf.effective_start_date     AND papf.effective_end_date
+           AND v_attendance_date  BETWEEN hep.effective_start_date     AND hep.effective_end_date
+           AND v_attendance_date BETWEEN haa.effective_start_date  AND haa.effective_end_date
+           AND v_attendance_date BETWEEN hrp.date_from  AND nvl(hrp.date_to,to_date('31-Dec-4712'))
+                AND (   (    p_Section IS NULL
+                              AND p_Department IS NULL
+                              AND p_SBU IS NULL
+                             )
+                          OR (EXISTS (
+                                 SELECT     organization_id_child
+                                       FROM per_org_structure_elements str,
+                                            per_organization_structures pos
+                                      WHERE organization_id_child =
+                                                          paaf.organization_id
+                                        AND str.org_structure_version_id =
+                                                 pos.organization_structure_id
+                                        AND primary_structure_flag = 'Y'
+                                        AND str.business_group_id =
+                                               fnd_profile.VALUE
+                                                      ('PER_BUSINESS_GROUP_ID')
+                                 CONNECT BY str.organization_id_parent =
+                                                PRIOR str.organization_id_child
+                                 START WITH str.organization_id_child =
+                                               NVL
+                                                  ((SELECT organization_id
+                                                      FROM hr_all_organization_units
+                                                     WHERE organization_id =
+                                                              NVL
+                                                                 (NVL
+                                                                     (p_Section,
+                                                                      p_Department
+                                                                     ),
+                                                                 p_SBU
+                                                                 )),
+                                                   paaf.organization_id
+                                                  ))
+                             )
+                         );
+	BEGIN
+
+
+
+	fnd_file.put_line (fnd_file.LOG,'Before For Loop ! ');
+	----fnd_file.put_line (fnd_file.LOG,'p_Attendance ! '||TO_CHAR(to_date(p_Attendance,'YYYY/MM/DD HH24:MI:SS')));
+	fnd_file.put_line (fnd_file.LOG,'p_Punch_In ! '||p_Punch_In);
+	fnd_file.put_line (fnd_file.LOG,'P_punch_out ! '||P_punch_out);
+
+	v_attendance_date   := TRUNC (TO_DATE (p_Attendance, 'RRRR/MM/DD HH24:MI:SS'));
+
+	fnd_file.put_line (fnd_file.LOG,'v_attendance_date ! '||v_attendance_date);
+
+
+	FOR rec_atn_data IN C_EMP_OTL_ATN_DATA (v_attendance_date)
+	LOOP
+	 p_sts_flag := 'Y';
+
+			fnd_file.put_line (fnd_file.LOG,'Inside For Loop for SN ! '||rec_atn_data.EMPLOYEE_NUMBER);
+
+		BEGIN
+
+			   v_old_time_in := NULL;
+			   v_old_time_out := NULL;
+			   v_old_total_hours := NULL;
+
+		select TIME_BUILDING_BLOCK_ID ,TIME_IN,TIME_OUT ,TOTAL_HOURS into v_time_building_block_id ,v_old_time_in,v_old_time_out,v_old_total_hours
+		from XXOA_DETAIL_ATTENDANCE_V where
+		employee_id =rec_atn_data.employee_id
+		and PUNCH_DATE = v_attendance_date and rownum =1;
+
+		EXCEPTION WHEN OTHERS
+		THEN
+			fnd_file.put_line (fnd_file.LOG,'Error in Fetching TIME_BUILDING_BLOCK_ID for SN :  '||rec_atn_data.EMPLOYEE_NUMBER);
+
+		END;
+
+
+	IF v_time_building_block_id is not NULL
+	THEN
+	fnd_file.put_line (fnd_file.LOG,'Start of Timecard Updation Block ! ');
+
+
+		xxoa_create_update_time_entry.update_time_entry (
+			p_person_id 	  => rec_atn_data.employee_id,
+			p_bld_block_id   => v_time_building_block_id,
+			p_punch_date	  => v_attendance_date,---TO_CHAR(to_date(p_Attendance,'YYYY/MM/DD HH24:MI:SS')), --rec_atn_data.punch_date,
+			p_time_in		  => p_Punch_In ,
+			p_time_out		  => P_punch_out ,
+			p_success		  => v_success,
+			p_message		  => v_message);
+
+			fnd_file.put_line (fnd_file.LOG,'v_message ! '||v_message);
+
+		IF v_success = 'Y'
+		THEN
+			BEGIN
+				INSERT INTO xxoa_daily_attendance_history (employee_id,
+																		 time_building_block_id,
+																		 punch_date,
+																		 time_in,
+																		 time_out,
+																		 total_hours,
+																		 remarks,
+																		 remark_desc,
+																		 created_by,
+																		 creation_date,
+																		 last_update_login,
+																		 last_updated_by,
+																		 last_update_date)
+					  VALUES (rec_atn_data.employee_id,
+					  		 v_time_building_block_id,
+                                v_attendance_date,
+								 v_old_time_in,
+								 v_old_time_out,
+								 v_old_total_hours,
+								 'Updated based on Line Manager Approval',
+								 'Attendance updated through OTL Mass Update Program' ,
+								 v_user_id,
+								 SYSDATE,
+								 v_login_id,
+								 v_user_id,
+								 SYSDATE);
+			EXCEPTION WHEN OTHERS
+            THEN
+			 p_sts_flag := 'E';
+			 fnd_file.put_line (fnd_file.LOG,'Failure history table insert For SN   - ' || rec_atn_data.employee_number||'  ' || SUBSTR(SQLERRM,1,240));
+			END;
+
+		ELSE
+			 p_sts_flag := 'E';
+              fnd_file.put_line (fnd_file.LOG,'Error For SN  - ' || rec_atn_data.employee_number || ' - ' || v_message);
+		END IF;
+
+	ELSE -----IF rec_atn_data.time_building_block_id is  NULL THEN
+
+	fnd_file.put_line (fnd_file.LOG,'Timecard Details are not available for SN - ' || rec_atn_data.employee_number||' as on given date := '||v_attendance_date);
+
+	/* fnd_file.put_line (fnd_file.LOG,'Start of Timecard Creation Block ! ');
+	v_time_building_block_id   := NULL;
+
+	xxoa_create_update_time_entry.create_time_entry (
+			p_person_id 	=> rec_atn_data.employee_id,
+			p_punch_date	=> TO_CHAR(to_date (p_Attendance,'YYYY/MM/DD HH24:MI:SS')) ,--rec_atn_data.punch_date,
+			p_time_in		=> p_Punch_In, --rec_atn_data.upd_time_in,
+			p_time_out		=> P_punch_out, --rec_atn_data.upd_time_out,
+			p_success		=> v_success,
+			p_message		=> v_message,
+			p_time_building_block_id => v_time_building_block_id);
+
+
+	IF v_success = 'Y'
+		THEN
+			BEGIN
+				INSERT INTO xxoa_daily_attendance_history (employee_id,
+																		 time_building_block_id,
+																		 punch_date,
+																		 time_in,
+																		 time_out,
+																		 total_hours,
+																		 valid_in,
+																		 remarks,
+																		 remark_desc,
+																		 created_by,
+																		 creation_date,
+																		 last_update_login,
+																		 last_updated_by,
+																		 last_update_date)
+					  VALUES (rec_atn_data.employee_id,
+					  		 v_time_building_block_id,
+							--rec_atn_data.punch_date,
+                           TO_CHAR(to_date (p_Attendance,'YYYY/MM/DD HH24:MI:SS')),
+                            p_Punch_In,
+                            P_punch_out,
+							--rec_atn_data.upd_time_in,
+							--rec_atn_data.upd_time_out,
+								 NULL,
+								 NULL,
+							rec_atn_data.remark,
+							rec_atn_data.reason,
+								v_user_id,
+								 SYSDATE,
+								 v_login_id,
+								 v_user_id,
+								 SYSDATE);
+			EXCEPTION WHEN OTHERS
+            THEN
+			 p_sts_flag := 'E';
+			 fnd_file.put_line (fnd_file.LOG,'Failure history table insert For SN   - ' || rec_atn_data.employee_number||'  person_analysis_id = '|| rec_atn_data.person_analysis_id || ' - ' || SUBSTR(SQLERRM,1,240));
+			END;
+
+
+
+		ELSE
+			 p_sts_flag := 'E';
+              fnd_file.put_line (fnd_file.LOG,'Error For Timecard Creation SN  - ' || rec_atn_data.employee_number || ' - ' || v_message);
+		END IF;
+		*/
+
+	END IF;  ----END added for SR 400991
+
+
+	 END Loop;
+
+        IF nvl(p_sts_flag,'N') = 'E'
+        THEN
+        p_retcode := 1;
+        END IF;
+
+	 EXCEPTION
+      WHEN OTHERS
+      THEN
+         fnd_file.put_line (fnd_file.LOG,
+                            'Error In Main Program '|| SUBSTR(SQLERRM,1,100)
+                           );
+
+   END XXOA_OTL_ATTENDANCE_MASS_UPD;
+
+
+latest updated
+
+SELECT  papf.employee_number employee_number,
+                papf.full_name employee_name,
+              paaf.assignment_id ,
+                papf.person_id employee_id
+         FROM per_all_people_f papf,
+                per_all_assignments_f paaf,
+                HXT_ADD_ASSIGN_INFO_F HAA,
+                hxt_rotation_plans hrp ,hxt_earning_policies hep
+          WHERE 1=1
+            AND   paaf.primary_flag             = 'Y'
+            AND paaf.person_id             = papf.person_id
+            AND paaf.ASSIGNMENT_TYPE ='E'
+            AND paaf.PRIMARY_FLAG ='Y'
+            and papf.CURRENT_EMPLOYEE_FLAG='Y'
+		--	AND papf.person_id = nvl(p_Employee,papf.person_id)
+           -- AND ppg.people_group_id(+) = paaf.people_group_id
+           and haa.assignment_id=paaf.assignment_id
+            and hep.id=haa.Earning_Policy
+			AND PAPF.SEX = 'F'
+         --   and paaf.payroll_id =nvl(p_payroll,paaf.payroll_id)
+            and hrp.id=haa.ROTATION_PLAN
+           and hrp.id=373 --nvl(p_Rotation,hrp.id)
+           AND '18-OCT-2026'  BETWEEN paaf.effective_start_date     AND paaf.effective_end_date
+           AND '18-OCT-2026' BETWEEN papf.effective_start_date     AND papf.effective_end_date
+           AND '18-OCT-2026'  BETWEEN hep.effective_start_date     AND hep.effective_end_date
+           AND '18-OCT-2026' BETWEEN haa.effective_start_date  AND haa.effective_end_date
+           AND '18-OCT-2026' BETWEEN hrp.date_from  AND nvl(hrp.date_to,to_date('31-Dec-4712'));
+		   
+		   
+		   8965
+6846
+80291
+81167
+83127
+80640
+83376
+83551
+83986
+83275
+83460
+83994
+83470
+82822
+80287
+83362
+83363
+83503
+80122
+83359
+83660
+83657
+60267
+990592
+990609
+84048
+91120
+83475
+83457
+83975
+83974
+83449
+82874
+83937
+83776
+83474
+82168
+84282
+84281
+80592
+83352
+83447
+83661
+84133
+83390
+83400
+83878
+84275
+84204
+84206
+84273
+83149
+84283
+83802
+83672
+84375
+83782
+60325
+60442
+31273
+9962
+60005
+30941
+97476
+94602
+60576
+93621
+81018
+82449
+990669
+81019
+20862
+60583
+10032
+82617
+82611
+94794
+90132
+31244
+30603
+6730
+9894
+30163
+9204
+60479
+8917
+80461
+97293
+60326
+990744
+7119
+60199
+60415
+60481
+60480
+60482
+60501
+60407
+60434
+6771
+60393
+60279
+90059
+60202
+91588
+91018
+91033
+30870
+90873
+60000
+6690
+60073
+8891
+60172
+81329
+60283
+30713
+60056
+60180
+81092
+60392
+6996
+30873
+93151
+60133
+91084
+93931
+80610
+990372
+60380
+92719
+30586
+97214
+97054
+94847
+990782
+60387
+60258
+97620
+90237
+97621
+60282
+96108
+96692
+92048
+60131
+91035
+60226
+95311
+95884
+60605
+97432
+93926
+60364
+6739
+97810
+9896
+80694
+60276
+80131
+60265
+95788
+6998
+80114
+9666
+90055
+60358
+60582
+60145
+91941
+90088
+91081
+60556
+96721
+94154
+81647
+96724
+96835
+31194
+60032
+8915
+9185
+6758
+9751
+97698
+93267
+94961
+97514
+60456
+97668
+60514
+97700
+97704
+97703
+97486
+9762
+31565
+60150
+97255
+92914
+9435
+60114
+6734
+80962
+60224
+81302
+60093
+90973
+30534
+9761
+90870
+60570
+60598
+97629
+60421
+60532
+97736
+6806
+94232
+60589
+6959
+6969
+92724
+60101
+8848
+96083
+91043
+8961
+60507
+30895
+9053
+93348
+93350
+60259
+91064
+92448
+96149
+92418
+93909
+6723
+3975
+60560
+60599
+20620
+20632
+92121
+60575
+93991
+97176
+97731
+990624
+82433
+82639
+93180
+82450
+20669
+90041
+80137
+82473
+92857
+20716
+97226
+31035
+93820
+60054
+94028
+96834
+8960
+60208
+97177
+90288
+93881
+93681
+96600
+98206
+60313
+20797
+20803
+93774
+20857
+20760
+20864
+20727
+20639
+20721
+97732
+82099
+9172
+20753
+20452
+6986
+96390
+20874
+9726
+60584
+91597
+96944
+95042
+20809
+60167
+20885
+20886
+                             
+                             
+                             
+                             
