@@ -1,0 +1,178 @@
+/*REM *****************************************************************************************************
+REM Issue Name      : Update the out-punch records
+REM                   
+REM Description     :  Script to update the out-punch records or all female staff on the admin roster for 18 October 2026.
+REM FILE            : XXOA_OTL_ATTENDANCE_MASS_UPD_451349.dba.sql
+REM PARAMETERS      : NONE
+REM HISTORY
+REM DATE         WHO                   DESCRIPTION
+REM -----------  ------------------    -------------------------------------------------------
+REM 21-OCT-2026  Hexaware Tech Ltd.   update the out-punch records  SR#451349#Update the out-punch records
+REM *****************************************************************************************************/
+
+SPOOL XXOA_OTL_ATTENDANCE_MASS_UPD_451349.TXT;
+SET SERVEROUTPUT ON SIZE 1000000;
+SET DEFINE OFF;
+
+DECLARE
+
+   l_object_version_number             NUMBER := NULL;
+   l_process VARCHAR2(10) :='N';
+   l_analysis_criteria_id number := NULL;
+   	v_proceed_flag 	 VARCHAR2 (1);
+	v_success			 VARCHAR2 (1);
+	v_message			 VARCHAR2 (2000);
+	v_business_group	 NUMBER := fnd_profile.VALUE ('PER_BUSINESS_GROUP_ID');
+	v_user_id			 NUMBER := fnd_profile.VALUE ('USER_ID');
+	v_login_id			 NUMBER := fnd_profile.VALUE ('LOGIN_ID');
+	l_global_max_OT      number;
+	l_global_max_OFF_OT number;
+	Off_working_hrs number;
+    v_shift_name VARCHAR2 (80);
+    v_shift_in VARCHAR2 (20);
+    v_shift_out VARCHAR2 (20);
+   v_test VARCHAR2 (20);
+   P_sts_flag  VARCHAR2 (1) := NULL;
+   v_time_building_block_id   NUMBER;
+   v_attendance_date DATE := NULL;
+   v_old_time_in Varchar2(10);
+   v_old_time_out Varchar2(10);
+   v_old_total_hours NUMBER;
+
+   CURSOR C_EMP_OTL_ATN_DATA ( v_attendance_date DATE)
+          is
+          		 SELECT  papf.employee_number employee_number,
+                HRP.NAME ROTATION_PLAN,         --Added for SR#451349
+                papf.full_name employee_name,
+              paaf.assignment_id ,
+                papf.person_id employee_id
+         FROM per_all_people_f papf,
+                per_all_assignments_f paaf,
+                HXT_ADD_ASSIGN_INFO_F HAA,
+                hxt_rotation_plans hrp ,hxt_earning_policies hep
+          WHERE 1=1
+            AND   paaf.primary_flag             = 'Y'
+            AND paaf.person_id             = papf.person_id
+            AND paaf.ASSIGNMENT_TYPE ='E'
+            AND paaf.PRIMARY_FLAG ='Y'
+            and papf.CURRENT_EMPLOYEE_FLAG='Y'
+		   --AND papf.person_id = nvl(p_Employee,papf.person_id)
+           -- AND ppg.people_group_id(+) = paaf.people_group_id
+           and haa.assignment_id=paaf.assignment_id
+            and hep.id=haa.Earning_Policy
+			AND PAPF.SEX = 'F'
+            --and paaf.payroll_id =nvl(p_payroll,paaf.payroll_id)
+			and paaf.payroll_id IN (65,67,381)
+            and hrp.id=haa.ROTATION_PLAN
+            and hrp.id= 373
+		  -- AND UPPER(HRP.NAME) LIKE '%ADMIN%700'
+           AND '18-OCT-2026' BETWEEN paaf.effective_start_date     AND paaf.effective_end_date
+           AND '18-OCT-2026' BETWEEN papf.effective_start_date     AND papf.effective_end_date
+           AND '18-OCT-2026' BETWEEN hep.effective_start_date     AND hep.effective_end_date
+           AND '18-OCT-2026' BETWEEN haa.effective_start_date  AND haa.effective_end_date
+           AND '18-OCT-2026' BETWEEN hrp.date_from  AND nvl(hrp.date_to,to_date('31-Dec-4712'));
+
+	BEGIN
+	dbms_output.put_line ('Before For Loop ! ');
+	----dbms_output.put_line ('p_Attendance ! '||TO_CHAR(to_date(p_Attendance,'YYYY/MM/DD HH24:MI:SS')));
+	dbms_output.put_line ('p_Punch_In ! '||p_Punch_In);
+	dbms_output.put_line ('P_punch_out ! '||P_punch_out);
+
+	v_attendance_date   := TRUNC (TO_DATE (p_Attendance, 'RRRR/MM/DD HH24:MI:SS'));
+    v_shift_out := '1500'; --assigned 1500
+	dbms_output.put_line ('v_attendance_date ! '||v_attendance_date);
+
+	FOR rec_atn_data IN C_EMP_OTL_ATN_DATA (v_attendance_date)
+	LOOP
+	 p_sts_flag := 'Y';
+			dbms_output.put_line ('Inside For Loop for SN ! '||rec_atn_data.EMPLOYEE_NUMBER);
+
+		BEGIN
+			   v_old_time_in := NULL;
+			   v_old_time_out := NULL;
+			   v_old_total_hours := NULL;
+
+		    SELECT
+                time_building_block_id,
+                time_in,
+                time_out,
+                total_hours
+            INTO
+                v_time_building_block_id,
+                v_old_time_in,
+                v_old_time_out,
+                v_old_total_hours
+            FROM
+                xxoa_detail_attendance_v
+            WHERE
+                    employee_id = rec_atn_data.employee_id
+                AND punch_date = v_attendance_date
+                AND ROWNUM = 1;
+
+		EXCEPTION WHEN OTHERS
+		THEN
+			dbms_output.put_line ('Error in Fetching TIME_BUILDING_BLOCK_ID for SN :  '||rec_atn_data.EMPLOYEE_NUMBER);
+		END;
+
+
+	IF v_time_building_block_id is not NULL
+	    AND v_old_time_out IS NULL
+	THEN
+	dbms_output.put_line ('Start of Timecard Updation Block ! ');
+		xxoa_create_update_time_entry.update_time_entry (
+			p_person_id 	  => rec_atn_data.employee_id,
+			p_bld_block_id   => v_time_building_block_id,
+			p_punch_date	  => v_attendance_date,---TO_CHAR(to_date(p_Attendance,'YYYY/MM/DD HH24:MI:SS')), --rec_atn_data.punch_date,
+			p_time_in		  => v_old_time_in , --the old punch in timing.
+			p_time_out		  => v_shift_out , --that is 1500
+			p_success		  => v_success,
+			p_message		  => v_message);
+			dbms_output.put_line ('v_message ! '||v_message);
+
+		IF v_success = 'Y'
+		THEN
+			dbms_output.put_line ('RESULT: SN '||rec_atn_data.employee_number||' - OUT PUNCH UPDATED to '||P_punch_out);
+			BEGIN
+				INSERT INTO xxoa_daily_attendance_history (employee_id,
+																		 time_building_block_id,
+																		 punch_date,
+																		 time_in,
+																		 time_out,
+																		 total_hours,
+																		 remarks,
+																		 remark_desc,
+																		 created_by,
+																		 creation_date,
+																		 last_update_login,
+																		 last_updated_by,
+																		 last_update_date)
+					  VALUES (rec_atn_data.employee_id,
+					  		 v_time_building_block_id,
+                                v_attendance_date,
+								 v_old_time_in,
+								 v_old_time_out,
+								 v_old_total_hours,
+								 'Updated based on Line Manager Approval',
+								 'Attendance updated through OTL Mass Update Program' ,
+								 v_user_id,
+								 SYSDATE,
+								 v_login_id,
+								 v_user_id,
+								 SYSDATE);
+			EXCEPTION WHEN OTHERS
+            THEN
+			 p_sts_flag := 'E';
+			dbms_output.put_line ('Failure history table insert For SN   - ' || rec_atn_data.employee_number||'  ' || SUBSTR(SQLERRM,1,240));
+			END;
+
+		ELSE
+			 p_sts_flag := 'E';
+             dbms_output.put_line ('RESULT: SN '||rec_atn_data.employee_number||' - OUT PUNCH NOT UPDATED - '||v_message);
+		END IF;
+
+	ELSE -----IF rec_atn_data.time_building_block_id is  NULL THEN
+	dbms_output.put_line ('Timecard Details are not available for SN - ' || rec_atn_data.employee_number||' as on given date := '||v_attendance_date);
+
+	END IF;  
+  /
+SPOOL OFF; 
