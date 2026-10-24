@@ -1,0 +1,211 @@
+/*REM *****************************************************************************************************
+REM Issue Name      : Update the out-punch records
+REM                   
+REM Description     :  Script to update the out-punch records or all female staff on the admin roster for 18 October 2026.
+REM FILE            : XXOA_OTL_ATTENDANCE_MASS_UPD_451349.dba.sql
+REM PARAMETERS      : NONE
+REM HISTORY
+REM DATE         WHO                   DESCRIPTION
+REM -----------  ------------------    -------------------------------------------------------
+REM 21-OCT-2026  Hexaware Tech Ltd.   update the out-punch records  SR#451349#Update the out-punch records
+REM *****************************************************************************************************/
+spool XXOA_OTL_ATTENDANCE_MASS_UPD_451349.TXT;
+
+set serveroutput on size 1000000;
+
+set define off; 
+
+declare
+
+    L_OBJECT_VERSION_NUMBER    number := null;
+    L_PROCESS                  varchar2(10) := 'N';
+    L_ANALYSIS_CRITERIA_ID     number := null;
+    V_PROCEED_FLAG             varchar2(1);
+    V_SUCCESS                  varchar2(1);
+    V_MESSAGE                  varchar2(2000);
+    V_BUSINESS_GROUP           number := 81;
+    V_USER_ID                  number := -1;
+    V_LOGIN_ID                 number := -1;
+    L_GLOBAL_MAX_OT            number;
+    L_GLOBAL_MAX_OFF_OT        number;
+    OFF_WORKING_HRS            number;
+    V_SHIFT_NAME               varchar2(80);
+    V_SHIFT_IN                 varchar2(20);
+    V_SHIFT_OUT                varchar2(20);
+    V_TEST                     varchar2(20);
+    P_STS_FLAG                 varchar2(1) := null;
+    V_TIME_BUILDING_BLOCK_ID   number;
+    V_ATTENDANCE_DATE          date := null;
+    V_OLD_TIME_IN              varchar2(10);
+    V_OLD_TIME_OUT             varchar2(10);
+    V_OLD_TOTAL_HOURS          number;
+    L_COUNT_SUCC               number := 0; 
+    L_COUNT_FAIL               number := 0; 
+    L_COUNT_TB_SUCC            number := 0; 
+    L_COUNT_TB_FAIL            number := 0;
+	
+	
+    cursor C_EMP_OTL_ATN_DATA (
+        V_ATTENDANCE_DATE date
+    ) is
+    select
+    XASV.EMPLOYEE_NUMBER,
+    PAPF.PERSON_ID EMPLOYEE_ID, 
+    XASV.EMPLOYEE_NAME,
+    XASV.PUNCH_DATE ATTENDANCE_DATE,
+    XASV.SHIFT_NAME,
+    XASV.ROTATION_PLAN,
+    XASV.SHIFT_IN,
+    XASV.SHIFT_OUT,
+    XASV.TIME_IN_TIMSTAMP PUNCH_IN,
+    XASV.TIME_OUT_TIMSTAMP PUNCH_OUT,
+    XASV.TIME_IN,
+    XASV.TIME_OUT,
+    XASV.STATUS
+from
+    XXOA_ATTENDANCE_SUMMARY_V XASV,
+    PER_ALL_PEOPLE_F PAPF,
+    PER_ALL_ASSIGNMENTS_F PAAF
+where
+        XASV.EMPLOYEE_NUMBER = PAPF.EMPLOYEE_NUMBER
+    AND PAPF.PERSON_ID = PAAF.PERSON_ID
+    AND PAAF.PAYROLL_ID in (65,67,381)
+    AND XASV.PUNCH_DATE between TO_DATE(V_ATTENDANCE_DATE) and TO_DATE(V_ATTENDANCE_DATE)
+    --and XASV.EMPLOYEE_NUMBER in ('60533')
+    AND XASV.TIME_IN = '0'
+    AND XASV.TIME_OUT = '0'
+    AND XASV.ROTATION_PLAN NOT IN ('Off')
+    AND XASV.STATUS = 'ABSENT'
+    AND TRUNC(SYSDATE) BETWEEN PAPF.EFFECTIVE_START_DATE AND PAPF.EFFECTIVE_END_DATE
+    AND TRUNC(SYSDATE) BETWEEN PAAF.EFFECTIVE_START_DATE AND PAAF.EFFECTIVE_END_DATE;
+
+begin 
+
+	V_ATTENDANCE_DATE := to_date('18-OCT-2026');--TRUNC (TO_DATE ('18-OCT-2026', 'RRRR/MM/DD HH24:MI:SS'));
+
+for REC_ATN_DATA in C_EMP_OTL_ATN_DATA (V_ATTENDANCE_DATE)
+	loop
+	 P_STS_FLAG := 'Y';
+
+		begin
+
+			   V_OLD_TIME_IN := null;
+			   V_OLD_TIME_OUT := null;
+			   V_OLD_TOTAL_HOURS := null;
+
+		select
+				TIME_BUILDING_BLOCK_ID,
+				TIME_IN,
+				TIME_OUT,
+				TOTAL_HOURS
+		into
+				V_TIME_BUILDING_BLOCK_ID,
+				V_OLD_TIME_IN,
+				V_OLD_TIME_OUT,
+				V_OLD_TOTAL_HOURS
+        from
+                XXOA_DETAIL_ATTENDANCE_V
+        where
+                EMPLOYEE_ID = REC_ATN_DATA.EMPLOYEE_ID
+                and PUNCH_DATE = V_ATTENDANCE_DATE
+                and rownum = 1;
+	
+	        DBMS_OUTPUT.PUT_LINE ('TIME_BUILDING_BLOCK_ID for SN :  '||REC_ATN_DATA.EMPLOYEE_NUMBER||'  is - '||V_TIME_BUILDING_BLOCK_ID );
+
+		exception when others
+		then
+			DBMS_OUTPUT.PUT_LINE ('Error in Fetching TIME_BUILDING_BLOCK_ID for SN :  '||REC_ATN_DATA.EMPLOYEE_NUMBER);
+
+		end;
+		
+		
+    begin
+	if V_TIME_BUILDING_BLOCK_ID is null
+	then
+    V_TIME_BUILDING_BLOCK_ID := null;
+    XXOA_CREATE_UPDATE_TIME_ENTRY.CREATE_TIME_ENTRY(P_PERSON_ID => REC_ATN_DATA.EMPLOYEE_ID, 
+													P_PUNCH_DATE => V_ATTENDANCE_DATE, 
+													P_TIME_IN    => REC_ATN_DATA.SHIFT_IN, 
+													P_TIME_OUT => REC_ATN_DATA.SHIFT_OUT, 
+													P_SUCCESS => V_SUCCESS,
+                                                    P_MESSAGE => V_MESSAGE, 
+													P_TIME_BUILDING_BLOCK_ID => V_TIME_BUILDING_BLOCK_ID)
+                                                    ;
+    DBMS_OUTPUT.PUT_LINE('SN  - '
+                         || REC_ATN_DATA.EMPLOYEE_NUMBER
+                         || ' Timecard data has been updated Successfully !!!!');
+     L_COUNT_SUCC := L_COUNT_SUCC +1; 
+     
+     
+     end if;
+     exception when others then
+        P_STS_FLAG := 'E';
+        DBMS_OUTPUT.PUT_LINE('RRR '
+                             || 'Failure For SN  - '
+                             || REC_ATN_DATA.EMPLOYEE_NUMBER
+                             || ' - '
+                             || SQLERRM);
+        L_COUNT_FAIL := L_COUNT_FAIL +1;  
+        ROLLBACK;
+     end;
+
+    if V_SUCCESS = 'Y' then
+        begin
+            insert into XXOA_DAILY_ATTENDANCE_HISTORY (
+                EMPLOYEE_ID,
+                TIME_BUILDING_BLOCK_ID,
+                PUNCH_DATE,
+                TIME_IN,
+                TIME_OUT,
+                TOTAL_HOURS,
+                VALID_IN,
+                REMARKS,
+                REMARK_DESC,
+                CREATED_BY,
+                CREATION_DATE,
+                LAST_UPDATE_LOGIN,
+                LAST_UPDATED_BY,
+                LAST_UPDATE_DATE
+            ) values (
+                REC_ATN_DATA.EMPLOYEE_ID,
+                V_TIME_BUILDING_BLOCK_ID,
+                V_ATTENDANCE_DATE,
+                REC_ATN_DATA.SHIFT_IN,
+                REC_ATN_DATA.SHIFT_OUT,
+                null,
+                null,
+                'Updated based on Line Manager Approval',
+                'Attendance updated through script as per SR 451349',
+                V_USER_ID,
+                SYSDATE,
+                V_LOGIN_ID,
+                V_USER_ID,
+                SYSDATE
+            );
+        L_COUNT_TB_SUCC := L_COUNT_TB_SUCC +1;  
+        
+        exception
+            when others then
+                P_STS_FLAG := 'E';
+                DBMS_OUTPUT.PUT_LINE('Failure history table insert For SN   - '
+                                     || REC_ATN_DATA.EMPLOYEE_NUMBER
+                                     || SUBSTR(SQLERRM, 1, 240));
+                L_COUNT_TB_FAIL := L_COUNT_TB_FAIL +1;  
+        ROLLBACK;                     
+
+        end;
+    end if;
+
+	end loop;
+    commit;
+    dbms_output.put_line('=======================================================================================');
+	dbms_output.put_line('Total number of employees processed::: ' || L_COUNT_SUCC);
+    dbms_output.put_line('Total number of employees not processed::: ' || L_COUNT_FAIL);
+    dbms_output.put_line('Total number of employees processed in Table::: ' || L_COUNT_TB_SUCC);
+    dbms_output.put_line('Total number of employees not processed in Table::: ' || L_COUNT_TB_FAIL);
+    dbms_output.put_line('=======================================================================================');
+    
+	end;
+/
+
+spool off; 
